@@ -2,8 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const root = new URL('../', import.meta.url)
-const read = (path: string): string =>
-  readFileSync(new URL(path, root), 'utf8')
+const read = (path: string): string => readFileSync(new URL(path, root), 'utf8')
 
 describe('release configuration', () => {
   it('starts from the released package version', () => {

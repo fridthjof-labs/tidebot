@@ -53,8 +53,8 @@ jobs:
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
     # Two pins, and they must move together: `@vX.Y.Z` selects the workflow
-    # file, `ref: vX.Y.Z` selects the bot code that workflow checks out. Pinning only
-    # the first would still run whatever is on the default branch.
+    # file, and `ref: vX.Y.Z` selects the bot code that workflow checks out.
+    # Pinning only the first would still run the default branch.
     uses: fridthjof-labs/tidebot/.github/workflows/run.yml@v0.1.0 # x-release-please-version
     with:
       ref: v0.1.0 # x-release-please-version
