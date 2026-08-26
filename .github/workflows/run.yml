@@ -1,0 +1,60 @@
+# Reusable workflow: run Tidebot once against the event that triggered the
+# calling workflow. This is the zero-infrastructure runtime — a repository
+# installs one caller workflow and needs no hosted webhook receiver at all.
+name: Tidebot run
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Tidebot version to run (tag, branch, or SHA)
+        required: false
+        type: string
+        default: main
+    secrets:
+      app_id:
+        description: Tidebot App ID; without it the job acts as github-actions[bot]
+        required: false
+      private_key:
+        description: Tidebot App private key
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: read
+  actions: write
+  deployments: read
+
+jobs:
+  tidebot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: fridthjof-labs/tidebot
+          ref: ${{ inputs.ref }}
+          path: .tidebot
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: .tidebot/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: .tidebot/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: .tidebot
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Tidebot
+        working-directory: .tidebot
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TIDEBOT_APP_ID: ${{ secrets.app_id }}
+          TIDEBOT_PRIVATE_KEY: ${{ secrets.private_key }}
+        run: pnpm exec tsx src/cli/index.ts run

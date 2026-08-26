@@ -1,0 +1,45 @@
+# Tidebot, running inside this repository — no hosted webhook receiver needed.
+#
+# Delete this file if the repository is served by a hosted Tidebot instance
+# instead; running both would double every action.
+name: Tidebot
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+  issue_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted]
+  check_suite:
+    types: [completed]
+  workflow_run:
+    workflows: ['*']
+    types: [completed]
+  push:
+    # Change this if your default branch is not `main`.
+    branches: [main]
+
+concurrency:
+  # Serialise per pull request so two events cannot both try to merge it.
+  group: tidebot-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tidebot:
+    # Two events this must not act on:
+    #   - its own completion, or workflow_run would chain into itself;
+    #   - a pull request from a fork, where GITHUB_TOKEN is read-only and
+    #     every write would fail. Serve forks from a hosted instance instead.
+    if: >-
+      (github.event_name != 'workflow_run' ||
+       github.event.workflow_run.name != 'Tidebot') &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    uses: fridthjof-labs/tidebot/.github/workflows/run.yml@main
+    secrets:
+      # Optional: set these to act as the Tidebot App rather than
+      # github-actions[bot]. Without them everything still works, except that
+      # pushes cannot re-trigger CI.
+      app_id: ${{ secrets.TIDEBOT_APP_ID }}
+      private_key: ${{ secrets.TIDEBOT_PRIVATE_KEY }}
