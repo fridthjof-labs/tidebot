@@ -111,10 +111,19 @@ async function executeCommentCommand(
       command.name === 'plan'
         ? ctx.config.plan.workflowFile
         : ctx.config.commands.deployWorkflowFile
+    // isCommandAvailable already rejected an unconfigured command; narrowing
+    // again here is what lets the type checker agree, rather than a `!`.
+    if (!workflowFile) {
+      return {
+        kind: 'unavailable',
+        command: command.name,
+        message: 'is not configured for this repository.',
+      }
+    }
     const result = await dispatchWorkflow(
       ctx.octokit,
       ctx.ref,
-      workflowFile!,
+      workflowFile,
       ref,
       command.name === 'deploy' ? ctx.config.commands.deployInputs : undefined,
     )

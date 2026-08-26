@@ -67,18 +67,64 @@ async function resolveClient(
   }
 }
 
-// The Actions payload is the raw webhook JSON; each handler narrows the part
-// it reads rather than restating GitHub's entire event schema here.
-// biome-ignore lint/suspicious/noExplicitAny: raw webhook JSON
-type EventPayload = Record<string, any>
+/**
+ * The event payload as it arrives on disk: unvalidated JSON. Rather than
+ * restating GitHub's whole schema, each event names only the fields this
+ * runtime reads, and `dispatch` asserts that shape once per case. The webhook
+ * runtimes get the same fields from Octokit's own typed emitter.
+ */
+type EventPayload = { repository?: RepositoryFields; action?: string }
 
-function commentContext(payload: EventPayload): CommentContext {
+type RepositoryFields = { full_name?: string; default_branch?: string }
+
+type CommentFields = {
+  id: number
+  body?: string | null
+  author_association?: string | null
+  user?: { login?: string | null } | null
+}
+
+type IssueCommentPayload = EventPayload & {
+  issue: { number: number; pull_request?: unknown }
+  comment: CommentFields
+}
+
+type PullRequestPayload = EventPayload & {
+  pull_request: Parameters<typeof toPullRequest>[0] & { number: number }
+}
+
+type ReviewPayload = EventPayload & {
+  pull_request: { number: number }
+  review: CommentFields
+}
+
+type CheckSuitePayload = EventPayload & {
+  check_suite: { pull_requests?: Array<{ number: number }> }
+}
+
+type WorkflowRunPayload = EventPayload & {
+  workflow_run: {
+    id: number
+    name?: string | null
+    event: string
+    conclusion: string | null
+    head_sha: string
+    pull_requests?: Array<{ number: number }>
+  }
+}
+
+type PushPayload = EventPayload & { ref: string }
+
+function commentContext(
+  issueNumber: number,
+  comment: CommentFields,
+): CommentContext {
   return {
-    body: payload.comment.body ?? undefined,
-    commentId: payload.comment.id,
-    issueNumber: payload.issue.number,
-    authorAssociation: payload.comment.author_association ?? null,
-    userLogin: payload.comment.user?.login ?? null,
+    body: comment.body ?? undefined,
+    commentId: comment.id,
+    issueNumber,
+    authorAssociation: comment.author_association ?? null,
+    userLogin: comment.user?.login ?? null,
   }
 }
 
@@ -89,69 +135,74 @@ async function dispatch(
 ): Promise<void> {
   switch (eventName) {
     case 'pull_request':
-    case 'pull_request_target':
+    case 'pull_request_target': {
+      const { pull_request } = payload as PullRequestPayload
       await handlePullRequest(
         ctx,
-        payload.pull_request.number,
-        toPullRequest(payload.pull_request),
+        pull_request.number,
+        toPullRequest(pull_request),
       )
       return
+    }
 
-    case 'issue_comment':
-      if (payload.issue.pull_request) {
-        await handleIssueComment(ctx, commentContext(payload))
+    case 'issue_comment': {
+      const { issue, comment } = payload as IssueCommentPayload
+      const context = commentContext(issue.number, comment)
+      if (issue.pull_request) {
+        await handleIssueComment(ctx, context)
       } else {
-        await handleIssueIntakeComment(ctx, commentContext(payload))
+        await handleIssueIntakeComment(ctx, context)
       }
       return
+    }
 
-    case 'pull_request_review':
+    case 'pull_request_review': {
       if (payload.action !== 'submitted') {
         return
       }
-      await handleIssueComment(ctx, {
-        body: payload.review.body ?? undefined,
-        commentId: payload.review.id,
-        issueNumber: payload.pull_request.number,
-        authorAssociation: payload.review.author_association,
-        userLogin: payload.review.user?.login ?? null,
-      })
+      const { pull_request, review } = payload as ReviewPayload
+      await handleIssueComment(ctx, commentContext(pull_request.number, review))
       return
+    }
 
-    case 'check_suite':
+    case 'check_suite': {
       if (payload.action !== 'completed') {
         return
       }
+      const { check_suite } = payload as CheckSuitePayload
       await handleCheckEvent(
         ctx,
-        (payload.check_suite.pull_requests ?? []).map(
-          (pull: { number: number }) => pull.number,
-        ),
+        (check_suite.pull_requests ?? []).map((pull) => pull.number),
       )
       return
+    }
 
-    case 'workflow_run':
+    case 'workflow_run': {
       if (payload.action !== 'completed') {
         return
       }
+      const { workflow_run } = payload as WorkflowRunPayload
       await handleWorkflowRun(ctx, {
-        id: payload.workflow_run.id,
-        name: payload.workflow_run.name ?? null,
-        event: payload.workflow_run.event,
-        conclusion: payload.workflow_run.conclusion,
-        head_sha: payload.workflow_run.head_sha,
-        pull_requests: (payload.workflow_run.pull_requests ?? []).map(
-          (pull: { number: number }) => ({ number: pull.number }),
-        ),
+        id: workflow_run.id,
+        name: workflow_run.name ?? null,
+        event: workflow_run.event,
+        conclusion: workflow_run.conclusion,
+        head_sha: workflow_run.head_sha,
+        pull_requests: (workflow_run.pull_requests ?? []).map((pull) => ({
+          number: pull.number,
+        })),
       })
       return
+    }
 
-    case 'push':
-      if (payload.ref !== `refs/heads/${ctx.defaultBranch}`) {
+    case 'push': {
+      const { ref } = payload as PushPayload
+      if (ref !== `refs/heads/${ctx.defaultBranch}`) {
         return
       }
       await handleDefaultBranchPush(ctx)
       return
+    }
 
     default:
       console.log(`tidebot: no handler for event ${eventName}`)

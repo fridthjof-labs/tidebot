@@ -164,9 +164,12 @@ exist — the failures that otherwise look like the bot silently ignoring you.
 
 ```bash
 pnpm install
-pnpm check      # lint, typecheck, tests
+pnpm check      # lint, typecheck, tests with coverage thresholds
 pnpm serve      # local webhook receiver on :3000
 ```
+
+Architecture, the invariants that must not be broken, and how to add a plugin
+are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

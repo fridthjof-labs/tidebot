@@ -9,3 +9,4 @@ dist/
 *.pem
 tidebot-app.json
 tidebot-signing-key.*
+coverage/

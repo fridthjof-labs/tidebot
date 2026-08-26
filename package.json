@@ -22,10 +22,11 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "test": "vitest run",
-    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test:coverage",
     "tidebot": "tsx src/cli/index.ts",
     "serve": "tsx src/cli/index.ts serve",
-    "deploy:workers": "wrangler deploy"
+    "deploy:workers": "wrangler deploy",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@octokit/app": "^16.1.2",
@@ -38,6 +39,7 @@
     "@biomejs/biome": "^2.3.14",
     "@cloudflare/workers-types": "^5.20260714.1",
     "@types/node": "^24.10.1",
+    "@vitest/coverage-v8": "^3.2.7",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4",

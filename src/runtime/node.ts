@@ -32,7 +32,7 @@ async function readBody(
   })
 }
 
-export function createWebhookServer(
+function createWebhookServer(
   clients: BotClients,
   options: WebhookOptions = {},
 ): ReturnType<typeof createServer> {

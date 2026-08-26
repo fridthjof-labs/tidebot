@@ -66,7 +66,7 @@ export function isMajorDependabotUpdate(title: string, body = ''): boolean {
   return majorVersion(bump.to) > majorVersion(bump.from)
 }
 
-export function pathsAreAllowed(
+function pathsAreAllowed(
   paths: string[],
   allowedPathPrefixes: string[],
 ): boolean {
@@ -124,31 +124,13 @@ export function evaluateDependabotSafety(
   return { safe: reasons.length === 0, reasons }
 }
 
-export function shouldAutoApproveDependabot(
-  pr: PullRequest,
-  tideConfig: BotConfig['tide'],
-  dependabotConfig: BotConfig['dependabot'],
-  checkRuns: CheckRun[],
-  statuses: Status[],
-  changedPaths: string[],
-): boolean {
-  return evaluateDependabotSafety(
-    pr,
-    tideConfig,
-    dependabotConfig,
-    checkRuns,
-    statuses,
-    changedPaths,
-  ).safe
-}
-
 export function hasHardDependabotBlocker(reasons: string[]): boolean {
   return reasons.some((reason) =>
     HARD_BLOCKER_PREFIXES.some((prefix) => reason.startsWith(prefix)),
   )
 }
 
-export function needsDependabotRebase(pr: PullRequest): boolean {
+function needsDependabotRebase(pr: PullRequest): boolean {
   return pr.mergeable_state === 'behind' || pr.mergeable_state === 'dirty'
 }
 

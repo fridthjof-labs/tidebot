@@ -9,7 +9,7 @@ function hasAnyLabel(pr: PullRequest, labels: string[]): boolean {
   return pr.labels.some((entry) => labels.includes(entry.name ?? ''))
 }
 
-export function daysSince(
+function daysSince(
   isoDate: string | null | undefined,
   now = Date.now(),
 ): number {

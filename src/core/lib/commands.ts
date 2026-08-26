@@ -100,10 +100,6 @@ export function parseCommentCommands(body: string): ParsedCommand[] {
   return commands
 }
 
-export function parseCommentCommand(body: string): ParsedCommand | null {
-  return parseCommentCommands(body)[0] ?? null
-}
-
 /** True when the repository has configured the workflow a command needs. */
 export function isCommandAvailable(
   name: CommandName,

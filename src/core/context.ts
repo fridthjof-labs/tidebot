@@ -31,11 +31,4 @@ export function ruleAuthors(
   return (rule) => expandBotPlaceholder(rule.authors, ctx.identity)
 }
 
-export function isSelf(
-  ctx: BotContext,
-  login: string | null | undefined,
-): boolean {
-  return login === ctx.identity.login
-}
-
 export type { BotConfig, RepoRef }

@@ -1,3 +1,4 @@
+import type { EmitterWebhookEventName } from '@octokit/webhooks'
 import {
   createContext,
   handleCheckEvent,
@@ -289,7 +290,10 @@ export async function verifyGithubWebhook(
 ): Promise<void> {
   await clients.webhooks.verifyAndReceive({
     id: headers.deliveryId,
-    name: headers.eventName as never,
+    // The header is an arbitrary string until the signature is verified.
+    // Octokit rejects a name it does not know, so this asserts the shape
+    // rather than the value.
+    name: headers.eventName as EmitterWebhookEventName,
     signature: headers.signature,
     payload: body,
   })
