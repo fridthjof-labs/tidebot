@@ -2,6 +2,34 @@ import type { BotConfig } from '../types.js'
 
 const PLAN_BODY_MAX_LENGTH = 60_000
 
+/**
+ * Cap what a config-supplied regex is ever run against. The plan body comes
+ * from a workflow's job log, so its length is not bounded by anything the bot
+ * controls, and `summaryPattern` is written in a repository's config — a
+ * pathological pattern over an unbounded string is a hang, not a crash.
+ */
+const REGEX_INPUT_MAX_LENGTH = 200_000
+
+function bounded(text: string): string {
+  return text.length > REGEX_INPUT_MAX_LENGTH
+    ? text.slice(0, REGEX_INPUT_MAX_LENGTH)
+    : text
+}
+
+/**
+ * A fence long enough to contain the body. Plan output is attacker-influenced
+ * — anyone who can change a workflow's output can put a fence in it — and a
+ * three-backtick fence would let that content break out and forge the rest of
+ * the bot's comment.
+ */
+function fenceFor(body: string): string {
+  const longestRun = Math.max(
+    0,
+    ...[...body.matchAll(/`+/g)].map((match) => match[0].length),
+  )
+  return '`'.repeat(Math.max(3, longestRun + 1))
+}
+
 const ANSI_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
 
 function stripAnsi(text: string): string {
@@ -57,7 +85,7 @@ export function parsePlanChangeSummary(
   plan: string,
   config: BotConfig['plan'],
 ): string | null {
-  const match = plan.match(new RegExp(config.summaryPattern, 'i'))
+  const match = bounded(plan).match(new RegExp(config.summaryPattern, 'i'))
   if (!match) {
     return null
   }
@@ -68,7 +96,9 @@ export function parsePlanChangeSummary(
 
 function summaryLine(plan: string, config: BotConfig['plan']): string | null {
   return (
-    plan.match(new RegExp(`^.*${config.summaryPattern}.*$`, 'im'))?.[0] ?? null
+    bounded(plan).match(
+      new RegExp(`^.*${config.summaryPattern}.*$`, 'im'),
+    )?.[0] ?? null
   )
 }
 
@@ -125,7 +155,8 @@ export function formatPlanSection(
   if (options?.headSha) {
     lines.push(`Commit: \`${options.headSha.slice(0, 7)}\``, '')
   }
-  lines.push(`\`\`\`${config.codeFence}`, truncated, '```')
+  const fence = fenceFor(truncated)
+  lines.push(`${fence}${config.codeFence}`, truncated, fence)
 
   return lines.join('\n')
 }

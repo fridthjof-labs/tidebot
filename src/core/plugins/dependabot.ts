@@ -32,6 +32,7 @@ async function postRecoveryComment(
     pullNumber,
     marker,
     `${body}\n\n${marker}`,
+    ctx.identity.login,
   )
 }
 
@@ -100,7 +101,15 @@ async function maybeRecoverDependabot(
   }
 
   const marker = recoveryMarker('retest', pr.head.sha)
-  if (await hasIssueCommentMarker(ctx.octokit, ctx.ref, pullNumber, marker)) {
+  if (
+    await hasIssueCommentMarker(
+      ctx.octokit,
+      ctx.ref,
+      pullNumber,
+      marker,
+      ctx.identity.login,
+    )
+  ) {
     return
   }
 

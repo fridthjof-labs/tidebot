@@ -52,6 +52,7 @@ export async function maybeAutoMerge(
       pullNumber,
       marker,
       `Auto-merged with \`${mergeMethod}\` after required labels and checks passed.\n\n${marker}`,
+      ctx.identity.login,
     )
   } catch (error) {
     if (isBenignMergeError(error)) {
@@ -65,6 +66,7 @@ export async function maybeAutoMerge(
       pullNumber,
       marker,
       `Auto-merge failed: ${error instanceof Error ? error.message : String(error)}\n\n${marker}`,
+      ctx.identity.login,
     )
   }
 }

@@ -14,7 +14,7 @@ import {
   parseCommentCommands,
 } from '../lib/commands.js'
 import { setWorkflowLabel } from '../lib/labels.js'
-import { updateBranch } from '../lib/rebase.js'
+import { isForkPullRequest, updateBranch } from '../lib/rebase.js'
 import type { CommandOutcome } from '../lib/summary.js'
 import { formatCommandReply } from '../lib/summary.js'
 import type { CommentContext, ParsedCommand } from '../types.js'
@@ -96,6 +96,17 @@ async function executeCommentCommand(
       ctx.ref,
       comment.issueNumber,
     )
+    // workflow_dispatch resolves the ref inside *this* repository, so a fork
+    // PR's branch name either does not exist here or, worse, collides with an
+    // unrelated local branch and runs the wrong code.
+    if (isForkPullRequest(pull, ctx.ref)) {
+      return {
+        kind: 'unavailable',
+        command: command.name,
+        message:
+          'cannot run on a pull request from a fork — the branch does not exist in this repository.',
+      }
+    }
     const ref = pull.head.ref ?? pull.head.sha
     const workflowFile =
       command.name === 'plan'
@@ -143,6 +154,7 @@ async function executeCommentCommand(
         ctx.ref,
         comment.issueNumber,
         `Approval withdrawn by @${userLogin}.`,
+        ctx.identity.login,
       )
     }
   }
@@ -168,18 +180,29 @@ async function executeCommentCommand(
   }
 }
 
+export function isTrusted(ctx: BotContext, comment: CommentContext): boolean {
+  return ctx.config.commands.trustedAssociations.includes(
+    comment.authorAssociation ?? 'NONE',
+  )
+}
+
+/**
+ * `/help` answers only trusted users. On a public repository anyone can
+ * comment, and an open help command is a free way to make the bot post on
+ * demand — which costs the installation's shared REST quota and is visible
+ * spam under the bot's name.
+ */
 export async function replyWithCommandHelp(
   ctx: BotContext,
-  issueNumber: number,
-  body: string,
+  comment: CommentContext,
 ): Promise<void> {
-  if (body.trim() !== '/help') {
+  if ((comment.body ?? '').trim() !== '/help' || !isTrusted(ctx, comment)) {
     return
   }
   await commentOnIssue(
     ctx.octokit,
     ctx.ref,
-    issueNumber,
+    comment.issueNumber,
     commandHelp(ctx.config),
   )
 }
@@ -201,11 +224,7 @@ export async function handleIssueCommentCommand(
     return false
   }
 
-  if (
-    !ctx.config.commands.trustedAssociations.includes(
-      comment.authorAssociation ?? 'NONE',
-    )
-  ) {
+  if (!isTrusted(ctx, comment)) {
     await commentOnIssue(
       ctx.octokit,
       ctx.ref,

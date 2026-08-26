@@ -77,6 +77,7 @@ async function postApplyComment(
       workflowRun.head_sha,
       ctx.defaultBranch,
     )}\n\n${marker}`,
+    ctx.identity.login,
   )
 }
 

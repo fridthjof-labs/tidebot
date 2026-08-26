@@ -54,6 +54,7 @@ export async function upsertPipelineSummaryComment(
           ? options.planSection
           : await readExistingPlanSection(ctx, pullNumber),
     }),
+    ctx.identity.login,
   )
 }
 
@@ -75,8 +76,10 @@ async function readExistingPlanSection(
     sort: 'created',
     direction: 'desc',
   })
-  const existing = comments.find((comment) =>
-    comment.body?.includes(PIPELINE_COMMENT_MARKER),
+  const existing = comments.find(
+    (comment) =>
+      comment.user?.login === ctx.identity.login &&
+      comment.body?.includes(PIPELINE_COMMENT_MARKER),
   )
   return extractPlanSection(existing?.body ?? null)
 }

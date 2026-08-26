@@ -176,7 +176,7 @@ export async function handleIssueComment(
     return
   }
 
-  await replyWithCommandHelp(ctx, comment.issueNumber, comment.body ?? '')
+  await replyWithCommandHelp(ctx, comment)
 
   if (await handleIssueCommentCommand(ctx, comment)) {
     await handlePullRequest(ctx, comment.issueNumber)
@@ -202,6 +202,14 @@ export async function handleCheckEvent(
   }
 }
 
+/**
+ * One push fans out into two API calls per open pull request, and every
+ * installation shares one hourly quota. The cap stops a repository with a
+ * large backlog from spending the whole instance's budget on a single push;
+ * the ones left out are picked up by their own events.
+ */
+const MAX_PULLS_PER_PUSH = 50
+
 /** Base branch moved: pull already-approved PRs forward so CI re-runs. */
 export async function handleDefaultBranchPush(ctx: BotContext): Promise<void> {
   if (!ctx.config.plugins.tide || !ctx.config.tide.autoRebaseWhenBehind) {
@@ -213,7 +221,9 @@ export async function handleDefaultBranchPush(ctx: BotContext): Promise<void> {
     repo: ctx.ref.repo,
     state: 'open',
     base: ctx.defaultBranch,
-    per_page: 100,
+    per_page: MAX_PULLS_PER_PUSH,
+    sort: 'updated',
+    direction: 'desc',
   })
 
   for (const summary of pulls) {

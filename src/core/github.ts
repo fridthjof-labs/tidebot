@@ -285,12 +285,31 @@ async function listDeploymentStatusesForRef(
   )
 }
 
+/**
+ * Comments this bot wrote, identified by author rather than by content.
+ *
+ * Matching a marker alone would let anyone who can comment take control of
+ * the bot's own bookkeeping: a comment containing the marker string would be
+ * overwritten in place, and — worse — pruned as a duplicate. `issues: write`
+ * lets an App edit and delete anyone's comment, so that is a data-loss bug
+ * triggerable by any drive-by commenter, not a cosmetic one.
+ */
+function ownComments<
+  T extends { body?: string; user?: { login?: string } | null },
+>(comments: T[], marker: string, botLogin: string): T[] {
+  return comments.filter(
+    (comment) =>
+      comment.user?.login === botLogin && comment.body?.includes(marker),
+  )
+}
+
 export async function upsertIssueCommentWithMarker(
   octokit: Octokit,
   ref: RepoRef,
   issueNumber: number,
   marker: string,
   body: string,
+  botLogin: string,
 ): Promise<void> {
   const { owner, repo } = ref
   const { data: comments } = await octokit.rest.issues.listComments({
@@ -302,7 +321,7 @@ export async function upsertIssueCommentWithMarker(
     direction: 'desc',
   })
 
-  const existing = comments.find((comment) => comment.body?.includes(marker))
+  const [existing] = ownComments(comments, marker, botLogin)
   if (existing) {
     await octokit.rest.issues.updateComment({
       owner,
@@ -319,7 +338,13 @@ export async function upsertIssueCommentWithMarker(
     })
   }
 
-  await pruneIssueCommentDuplicatesWithMarker(octokit, ref, issueNumber, marker)
+  await pruneIssueCommentDuplicatesWithMarker(
+    octokit,
+    ref,
+    issueNumber,
+    marker,
+    botLogin,
+  )
 }
 
 async function pruneIssueCommentDuplicatesWithMarker(
@@ -327,6 +352,7 @@ async function pruneIssueCommentDuplicatesWithMarker(
   { owner, repo }: RepoRef,
   issueNumber: number,
   marker: string,
+  botLogin: string,
 ): Promise<void> {
   const { data: comments } = await octokit.rest.issues.listComments({
     owner,
@@ -337,9 +363,7 @@ async function pruneIssueCommentDuplicatesWithMarker(
     direction: 'desc',
   })
 
-  const duplicates = comments
-    .filter((comment) => comment.body?.includes(marker))
-    .slice(1)
+  const duplicates = ownComments(comments, marker, botLogin).slice(1)
 
   for (const duplicate of duplicates) {
     try {
@@ -457,10 +481,12 @@ export async function commentOnIssue(
   })
 }
 
+/** Find an issue this bot generated, so a redelivered webhook is idempotent. */
 export async function findIssueByBodyMarker(
   octokit: Octokit,
   { owner, repo }: RepoRef,
   marker: string,
+  botLogin: string,
 ): Promise<{ number: number; htmlUrl: string } | null> {
   const { data: issues } = await octokit.rest.issues.listForRepo({
     owner,
@@ -470,7 +496,10 @@ export async function findIssueByBodyMarker(
     direction: 'desc',
     per_page: 100,
   })
-  const issue = issues.find((candidate) => candidate.body?.includes(marker))
+  const issue = issues.find(
+    (candidate) =>
+      candidate.user?.login === botLogin && candidate.body?.includes(marker),
+  )
   return issue ? { number: issue.number, htmlUrl: issue.html_url } : null
 }
 
@@ -494,6 +523,7 @@ export async function hasIssueCommentMarker(
   { owner, repo }: RepoRef,
   issueNumber: number,
   marker: string,
+  botLogin: string,
 ): Promise<boolean> {
   const { data: comments } = await octokit.rest.issues.listComments({
     owner,
@@ -504,7 +534,7 @@ export async function hasIssueCommentMarker(
     direction: 'desc',
   })
 
-  return comments.some((comment) => comment.body?.includes(marker))
+  return ownComments(comments, marker, botLogin).length > 0
 }
 
 export async function rerunFailedWorkflowsForRef(
@@ -648,11 +678,13 @@ export async function submitPullRequestApproval(
   }
 }
 
+/** Withdraw this bot's own approval — never another app's or a human's. */
 export async function dismissBotPullRequestApproval(
   octokit: Octokit,
   { owner, repo }: RepoRef,
   pullNumber: number,
   message: string,
+  botLogin: string,
 ): Promise<{ dismissed: boolean; message: string }> {
   try {
     const { data: reviews } = await octokit.rest.pulls.listReviews({
@@ -666,7 +698,7 @@ export async function dismissBotPullRequestApproval(
       .reverse()
       .find(
         (review) =>
-          review.user?.login?.endsWith('[bot]') && review.state === 'APPROVED',
+          review.user?.login === botLogin && review.state === 'APPROVED',
       )
     if (!botApproval) {
       return { dismissed: false, message: 'No bot approval to dismiss.' }

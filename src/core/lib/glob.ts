@@ -17,11 +17,38 @@ export function matchesGlob(path: string, pattern: string): boolean {
 
 const regExpCache = new Map<string, RegExp>()
 
+/**
+ * Bounds on what a pattern may compile to. `**` becomes `.*`, and a pattern
+ * with many of them backtracks exponentially against a long path — so a repo
+ * config could otherwise hang the bot for everyone sharing the instance. The
+ * limits are far above any real rule; a pattern that trips one is a mistake.
+ */
+const MAX_PATTERN_LENGTH = 200
+const MAX_WILDCARDS = 12
+
+export class GlobError extends Error {}
+
+export function assertPatternIsSafe(pattern: string): void {
+  if (pattern.length > MAX_PATTERN_LENGTH) {
+    throw new GlobError(
+      `glob pattern is longer than ${MAX_PATTERN_LENGTH} characters`,
+    )
+  }
+  const wildcards = (pattern.match(/[*?]/g) ?? []).length
+  if (wildcards > MAX_WILDCARDS) {
+    throw new GlobError(
+      `glob pattern has more than ${MAX_WILDCARDS} wildcards: ${pattern}`,
+    )
+  }
+}
+
 function globToRegExp(pattern: string): RegExp {
   const cached = regExpCache.get(pattern)
   if (cached) {
     return cached
   }
+
+  assertPatternIsSafe(pattern)
 
   let source = '^'
   for (let index = 0; index < pattern.length; index++) {

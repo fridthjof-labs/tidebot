@@ -139,6 +139,17 @@ This needs a machine user, because GitHub will not verify a signature against
 an App's `[bot]` identity. The reasoning and the setup are in
 [docs/signed-rebase.md](docs/signed-rebase.md).
 
+## Security
+
+Tidebot never checks out or executes repository code, and it reads its
+configuration from the default branch — so a pull request cannot change the
+rules that govern it. Commands are gated on GitHub's own `author_association`
+and must start a line, so quoting a comment cannot run them.
+
+The full trust model, including what is deliberately *not* defended against,
+is in [docs/security.md](docs/security.md). Report vulnerabilities per
+[SECURITY.md](SECURITY.md).
+
 ## Diagnosing an install
 
 ```bash

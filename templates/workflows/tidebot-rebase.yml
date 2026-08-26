@@ -15,6 +15,7 @@ on:
 
 jobs:
   rebase:
+    # Pin this to a tag or SHA: the job holds the App key and the signing key.
     uses: fridthjof-labs/tidebot/.github/workflows/signed-rebase.yml@main
     with:
       pull_number: ${{ inputs.pull_number }}

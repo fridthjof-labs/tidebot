@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { handlePullRequest } from '../src/core/bot.js'
 import type { PullRequest } from '../src/core/types.js'
-import { config, context, pullRequest } from './helpers.js'
+import { config, context, IDENTITY, pullRequest } from './helpers.js'
 
 type FakeState = {
   pr: PullRequest
@@ -12,7 +12,7 @@ type FakeState = {
     started_at: string
   }>
   changedPaths: string[]
-  comments: Array<{ id: number; body: string }>
+  comments: Array<{ id: number; body: string; user: { login: string } }>
 }
 
 /**
@@ -20,6 +20,7 @@ type FakeState = {
  * care about and returns plausible shapes for the rest.
  */
 function fakeOctokit(state: FakeState) {
+  const deleteComment = vi.fn().mockResolvedValue({})
   const merge = vi.fn().mockResolvedValue({})
   const addLabels = vi.fn(async ({ labels }: { labels: string[] }) => {
     state.labels.push(...labels)
@@ -27,7 +28,11 @@ function fakeOctokit(state: FakeState) {
   })
   const removeLabel = vi.fn().mockResolvedValue({})
   const createComment = vi.fn(async ({ body }: { body: string }) => {
-    state.comments.push({ id: state.comments.length + 1, body })
+    state.comments.push({
+      id: state.comments.length + 1,
+      body,
+      user: { login: IDENTITY.login },
+    })
     return {}
   })
   const updateComment = vi.fn(
@@ -89,7 +94,7 @@ function fakeOctokit(state: FakeState) {
         listComments: vi.fn(async () => ({ data: state.comments })),
         createComment,
         updateComment,
-        deleteComment: vi.fn().mockResolvedValue({}),
+        deleteComment,
         update: vi.fn().mockResolvedValue({}),
       },
       checks: {
@@ -110,7 +115,14 @@ function fakeOctokit(state: FakeState) {
     },
   }
 
-  return { octokit: octokit as never, merge, addLabels, createComment }
+  return {
+    octokit: octokit as never,
+    merge,
+    addLabels,
+    createComment,
+    updateComment,
+    deleteComment,
+  }
 }
 
 const GREEN = [
@@ -254,5 +266,33 @@ describe('handlePullRequest', () => {
 
     expect(createComment).toHaveBeenCalledTimes(1)
     expect(state.comments[0].body).toMatch('### Pipeline status')
+  })
+
+  it('never edits or deletes a comment it did not write', async () => {
+    // `issues: write` lets the App edit and delete anyone's comment, so
+    // matching a marker alone would hand control of the bot's own bookkeeping
+    // to whoever pastes that marker into a comment.
+    const pr = pullRequest()
+    const impostor = {
+      id: 99,
+      body: 'nice bot <!-- tidebot-pipeline -->',
+      user: { login: 'a-human' },
+    }
+    const state: FakeState = {
+      pr,
+      labels: [],
+      checkRuns: GREEN,
+      changedPaths: ['src/a.ts'],
+      comments: [impostor],
+    }
+    const { octokit, createComment, updateComment, deleteComment } =
+      fakeOctokit(state)
+
+    await handlePullRequest(context({ octokit }), 42, pr)
+
+    expect(updateComment).not.toHaveBeenCalled()
+    expect(deleteComment).not.toHaveBeenCalled()
+    expect(createComment).toHaveBeenCalledTimes(1)
+    expect(state.comments[0]).toEqual(impostor)
   })
 })

@@ -1,4 +1,5 @@
 import { parse as parseYaml } from 'yaml'
+import { assertPatternIsSafe, GlobError } from '../lib/glob.js'
 import type { BotConfig, PartialBotConfig } from '../types.js'
 import { DEFAULT_CONFIG } from './defaults.js'
 import { deepMerge } from './merge.js'
@@ -6,6 +7,16 @@ import { deepMerge } from './merge.js'
 export class ConfigError extends Error {}
 
 const KNOWN_KEYS = new Set(Object.keys(DEFAULT_CONFIG))
+
+/**
+ * A config layer is written by whoever can land a commit on a default branch,
+ * and one instance serves many repositories. These caps keep a mistake in one
+ * repository from consuming the whole instance's time or API quota.
+ */
+const MAX_CONFIG_BYTES = 128 * 1024
+const MAX_RULES = 200
+const MAX_LIST_ENTRIES = 200
+const MAX_SUMMARY_PATTERN_LENGTH = 200
 const MERGE_METHODS = new Set(['merge', 'squash', 'rebase'])
 const UPDATE_BRANCH_METHODS = new Set(['merge', 'rebase', 'signed-rebase'])
 
@@ -26,6 +37,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * rule missing its label) without re-describing every field.
  */
 export function parsePartialConfig(raw: string): PartialBotConfig {
+  assert(
+    raw.length <= MAX_CONFIG_BYTES,
+    `tidebot config is larger than ${MAX_CONFIG_BYTES} bytes`,
+  )
+
+  // `yaml`'s default settings resolve no custom tags and cap alias expansion,
+  // so a hostile document cannot construct objects or blow up in size here.
   const parsed: unknown = raw.trim() ? parseYaml(raw) : {}
   if (parsed === null || parsed === undefined) {
     return {}
@@ -54,6 +72,10 @@ export function parsePartialConfig(raw: string): PartialBotConfig {
     )
   }
 
+  assert(
+    (config.area?.rules?.length ?? 0) <= MAX_RULES,
+    `area.rules has more than ${MAX_RULES} entries`,
+  )
   for (const rule of config.area?.rules ?? []) {
     assert(
       typeof rule?.prefix === 'string' && typeof rule?.label === 'string',
@@ -61,6 +83,10 @@ export function parsePartialConfig(raw: string): PartialBotConfig {
     )
   }
 
+  assert(
+    (config.autoApprove?.rules?.length ?? 0) <= MAX_RULES,
+    `autoApprove.rules has more than ${MAX_RULES} entries`,
+  )
   for (const rule of config.autoApprove?.rules ?? []) {
     assert(
       typeof rule?.name === 'string' && rule.name.length > 0,
@@ -70,6 +96,37 @@ export function parsePartialConfig(raw: string): PartialBotConfig {
       (rule.authors?.length ?? 0) > 0 || (rule.paths?.length ?? 0) > 0,
       `autoApprove rule "${rule.name}" must constrain authors or paths — an unconstrained rule would approve every pull request`,
     )
+    assert(
+      (rule.paths?.length ?? 0) + (rule.excludePaths?.length ?? 0) <=
+        MAX_LIST_ENTRIES,
+      `autoApprove rule "${rule.name}" lists more than ${MAX_LIST_ENTRIES} paths`,
+    )
+    // Compiling every pattern now turns a pathological glob into a config
+    // error on one repository, rather than a hang on the next event.
+    for (const pattern of [
+      ...(rule.paths ?? []),
+      ...(rule.excludePaths ?? []),
+    ]) {
+      try {
+        assertPatternIsSafe(pattern)
+      } catch (error) {
+        throw new ConfigError(
+          error instanceof GlobError ? error.message : String(error),
+        )
+      }
+    }
+  }
+
+  if (config.plan?.summaryPattern !== undefined) {
+    assert(
+      config.plan.summaryPattern.length <= MAX_SUMMARY_PATTERN_LENGTH,
+      `plan.summaryPattern is longer than ${MAX_SUMMARY_PATTERN_LENGTH} characters`,
+    )
+    try {
+      new RegExp(config.plan.summaryPattern)
+    } catch {
+      assert(false, 'plan.summaryPattern is not a valid regular expression')
+    }
   }
 
   for (const policy of config.tide?.policies ?? []) {

@@ -48,6 +48,9 @@ jobs:
        github.event.workflow_run.name != 'Tidebot') &&
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
+    # `@main` follows this repository's default branch. Pin it to a tag or a
+    # commit SHA if you would rather review each change before it runs with
+    # your repository's token.
     uses: fridthjof-labs/tidebot/.github/workflows/run.yml@main
     secrets:
       # Optional: set these to act as the Tidebot App rather than

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   commandHelp,
   isBotComment,
@@ -66,6 +66,45 @@ describe('isBotComment', () => {
     expect(isBotComment('some-other-app[bot]')).toBe(true)
     expect(isBotComment('a-human')).toBe(false)
     expect(isBotComment(null)).toBe(false)
+  })
+})
+
+describe('/help gating', () => {
+  it('is not a free way for anyone to make the bot post', async () => {
+    // On a public repository anyone can comment; an open /help costs the
+    // installation's shared REST quota and posts spam under the bot's name.
+    const { replyWithCommandHelp } = await import(
+      '../src/core/plugins/commands.js'
+    )
+    const createComment = vi.fn()
+    const ctx = {
+      octokit: { rest: { issues: { createComment } } },
+      ref: { owner: 'acme', repo: 'widget' },
+      config: config(),
+      identity: {
+        appId: 1,
+        slug: 'tidebot',
+        name: 'Tidebot',
+        login: 'tidebot[bot]',
+      },
+      defaultBranch: 'main',
+    } as never
+
+    await replyWithCommandHelp(ctx, {
+      body: '/help',
+      issueNumber: 1,
+      authorAssociation: 'NONE',
+      userLogin: 'drive-by',
+    })
+    expect(createComment).not.toHaveBeenCalled()
+
+    await replyWithCommandHelp(ctx, {
+      body: '/help',
+      issueNumber: 1,
+      authorAssociation: 'MEMBER',
+      userLogin: 'maintainer',
+    })
+    expect(createComment).toHaveBeenCalledOnce()
   })
 })
 

@@ -12,6 +12,7 @@ import {
 } from '../lib/intake.js'
 import { intakeMarker } from '../lib/markers.js'
 import type { CommentContext } from '../types.js'
+import { isTrusted } from './commands.js'
 
 /**
  * Turn `/bug` and `/feature` on a plain issue into a structured, labelled
@@ -42,11 +43,7 @@ export async function handleIssueIntake(
     return false
   }
 
-  if (
-    !ctx.config.commands.trustedAssociations.includes(
-      comment.authorAssociation ?? 'NONE',
-    )
-  ) {
+  if (!isTrusted(ctx, comment)) {
     await commentOnIssue(
       ctx.octokit,
       ctx.ref,
@@ -61,7 +58,12 @@ export async function handleIssueIntake(
   }
 
   const marker = intakeMarker(comment.commentId)
-  const existing = await findIssueByBodyMarker(ctx.octokit, ctx.ref, marker)
+  const existing = await findIssueByBodyMarker(
+    ctx.octokit,
+    ctx.ref,
+    marker,
+    ctx.identity.login,
+  )
   const issue =
     existing ??
     (await createIssue(
