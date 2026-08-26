@@ -12,9 +12,13 @@ on:
     types: [submitted]
   check_suite:
     types: [completed]
-  workflow_run:
-    workflows: ['*']
-    types: [completed]
+  # `workflow_run` is only needed by the `plan` and `pipeline` plugins, which
+  # read a workflow's job logs and deployment statuses. `check_suite` already
+  # covers "CI finished". Listening to every workflow starts a run for each one
+  # — including Tidebot's own, which the job below then has to skip.
+  # workflow_run:
+  #   workflows: [Infrastructure, Deploy]
+  #   types: [completed]
   push:
     # Change this if your default branch is not `main`.
     branches: [main]

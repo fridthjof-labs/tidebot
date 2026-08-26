@@ -26,6 +26,12 @@ switches it to the App and restores that.
 The generated workflow serialises per pull request with a `concurrency` group,
 so two events cannot both try to merge the same PR.
 
+It does not subscribe to `workflow_run` by default: `check_suite` already means
+"CI finished", and listening to every workflow starts a run for each one,
+Tidebot's own included. Uncomment that trigger, naming the specific workflows,
+if you enable the `plan` or `pipeline` plugins — they read job logs and
+deployment statuses that only `workflow_run` reports.
+
 ## Cloudflare Worker
 
 Stateless. Clients and webhook handlers are built once per isolate and reused;
