@@ -19,6 +19,17 @@ on:
     # Change this if your default branch is not `main`.
     branches: [main]
 
+# A reusable workflow cannot be granted more than its caller has, and many
+# repositories default the workflow token to read-only. These are exactly the
+# scopes the bot uses; trim them and the matching feature stops working.
+permissions:
+  contents: write        # squash merge writes to the base branch
+  pull-requests: write   # merge, review, labels
+  issues: write          # comments and generated issues
+  checks: read           # the merge gate
+  actions: write         # CI re-runs and workflow dispatch
+  deployments: read      # preview rows in the pipeline comment
+
 concurrency:
   # Serialise per pull request so two events cannot both try to merge it.
   group: tidebot-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
