@@ -165,19 +165,39 @@ export async function getPullRequestChangedPaths(
   return paths
 }
 
+function isAccessError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    (error.status === 403 || error.status === 404)
+  )
+}
+
+/**
+ * Check runs plus legacy commit statuses.
+ *
+ * Statuses need their own `statuses: read` grant, which check runs do not
+ * imply. A repository that has none — most do now — must not have every event
+ * fail on a permission it does not need, so a refusal degrades to an empty
+ * list rather than taking the handler down.
+ */
 export async function getChecksForRef(
   octokit: Octokit,
   { owner, repo }: RepoRef,
   ref: string,
 ): Promise<{ checkRuns: CheckRun[]; statuses: Status[] }> {
-  const [{ data: checks }, { data: statuses }] = await Promise.all([
+  const [{ data: checks }, statuses] = await Promise.all([
     octokit.rest.checks.listForRef({ owner, repo, ref, per_page: 100 }),
-    octokit.rest.repos.listCommitStatusesForRef({
-      owner,
-      repo,
-      ref,
-      per_page: 100,
-    }),
+    octokit.rest.repos
+      .listCommitStatusesForRef({ owner, repo, ref, per_page: 100 })
+      .then(({ data }) => data)
+      .catch((error: unknown) => {
+        if (isAccessError(error)) {
+          return []
+        }
+        throw error
+      }),
   ])
 
   return {

@@ -81,6 +81,7 @@ the installation itself.
 | Pull requests: write | `pulls.merge`, review submission |
 | Contents: write | a squash merge writes to the base branch |
 | Checks: read | reading the merge gate |
+| Commit statuses: read | legacy statuses, where a repository still uses them |
 | Deployments: read | preview rows in the pipeline comment |
 | Actions: write | CI re-runs, `/plan` and `/deploy`, plan job logs |
 | Metadata: read | required by GitHub |

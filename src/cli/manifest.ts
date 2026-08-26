@@ -24,6 +24,8 @@ export function appManifest(input: {
       contents: 'write',
       // Reading the merge gate.
       checks: 'read',
+      // Legacy commit statuses; not implied by `checks`.
+      statuses: 'read',
       // Preview deployment rows in the pipeline summary.
       deployments: 'read',
       // CI re-runs, /plan and /deploy dispatch, and plan job logs.

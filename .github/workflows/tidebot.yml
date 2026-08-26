@@ -27,6 +27,7 @@ permissions:
   pull-requests: write   # merge, review, labels
   issues: write          # comments and generated issues
   checks: read           # the merge gate
+  statuses: read         # legacy commit statuses, where a repo still uses them
   actions: write         # CI re-runs and workflow dispatch
   deployments: read      # preview rows in the pipeline comment
 

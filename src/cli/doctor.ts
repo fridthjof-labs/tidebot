@@ -13,6 +13,7 @@ const REQUIRED_PERMISSIONS: Array<[string, string]> = [
   ['contents', 'write'],
   ['issues', 'write'],
   ['checks', 'read'],
+  ['statuses', 'read'],
   ['metadata', 'read'],
 ]
 
