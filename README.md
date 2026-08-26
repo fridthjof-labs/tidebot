@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/tidebot-icon.png" alt="Tidebot icon" width="180">
+</p>
+
 # Tidebot
 
 Prow-style repository automation for GitHub, without Kubernetes.
