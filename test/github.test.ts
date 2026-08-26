@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getChecksForRef } from '../src/core/github.js'
+import {
+  getChecksForRef,
+  submitPullRequestApproval,
+} from '../src/core/github.js'
 
 const REF = { owner: 'acme', repo: 'widget' }
 
@@ -78,5 +81,55 @@ describe('getChecksForRef', () => {
         'abc',
       ),
     ).rejects.toThrow('boom')
+  })
+})
+
+describe('submitPullRequestApproval', () => {
+  function octokitRejectingWith(error: unknown) {
+    return {
+      rest: {
+        pulls: {
+          createReview: vi.fn(async () => {
+            throw error
+          }),
+        },
+      },
+    } as never
+  }
+
+  it('treats a duplicate approval as success', async () => {
+    const result = await submitPullRequestApproval(
+      octokitRejectingWith(
+        Object.assign(
+          new Error('Review has already approved this pull request'),
+          {
+            status: 422,
+          },
+        ),
+      ),
+      REF,
+      1,
+      'abc',
+      'body',
+    )
+    expect(result.approved).toBe(true)
+  })
+
+  it('does not claim success for a 422 that refused the review', async () => {
+    // GitHub answers 422 for a self-approval too. Reporting that as approved
+    // told the requester a review existed that GitHub had refused to create.
+    const result = await submitPullRequestApproval(
+      octokitRejectingWith(
+        Object.assign(new Error('Can not approve your own pull request'), {
+          status: 422,
+        }),
+      ),
+      REF,
+      1,
+      'abc',
+      'body',
+    )
+    expect(result.approved).toBe(false)
+    expect(result.message).toMatch(/own pull request/)
   })
 })

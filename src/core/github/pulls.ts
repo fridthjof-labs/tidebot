@@ -120,12 +120,26 @@ export async function updatePullRequestBranch(
   }
 }
 
-function isUnprocessableReviewError(error: unknown): boolean {
+/**
+ * GitHub answers 422 both for "you already approved this" and for refusals
+ * such as approving your own pull request. Only the first is a success, so
+ * the message decides — reporting every 422 as approved claimed a review
+ * existed when GitHub had refused to create one.
+ */
+function isAlreadyApprovedError(error: unknown): boolean {
+  if (
+    typeof error !== 'object' ||
+    error === null ||
+    !('status' in error) ||
+    error.status !== 422
+  ) {
+    return false
+  }
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'status' in error &&
-    error.status === 422
+    message.includes('already approved') ||
+    message.includes('can only be submitted once') ||
+    message.includes('pending review')
   )
 }
 
@@ -147,7 +161,7 @@ export async function submitPullRequestApproval(
     })
     return { approved: true, message: 'PR approved.' }
   } catch (error) {
-    if (isUnprocessableReviewError(error)) {
+    if (isAlreadyApprovedError(error)) {
       return { approved: true, message: 'PR already approved.' }
     }
     return {
