@@ -1,7 +1,15 @@
 import type { BotConfig, CommandName, ParsedCommand } from '../types.js'
 
-const COMMAND_PATTERN =
-  /\/(?:(lgtm|lgm|approve|hold|unhold|retest|rebase|plan|deploy)|remove-(lgtm|lgm|approve|hold))\b/gi
+/**
+ * A command must be the first thing on its line, as in Prow. Matching
+ * anywhere in the body would mean that quoting a comment, pasting the help
+ * text, or writing "don't /approve this yet" runs the command — and `/help`
+ * itself lists every command, so a body that mentions one is common.
+ */
+const COMMAND_LINE_PATTERN =
+  /^\/(?:(lgtm|lgm|approve|hold|unhold|retest|rebase|plan|deploy)|remove-(lgtm|lgm|approve|hold))\b(.*)$/i
+
+const CODE_FENCE_PATTERN = /^\s*(```|~~~)/
 
 export function isBotComment(userLogin: string | null | undefined): boolean {
   return userLogin?.endsWith('[bot]') ?? false
@@ -39,43 +47,53 @@ function normalizeRemovedCommandName(name: string): CommandName | null {
   return null
 }
 
-function parsedCommandFromMatch(
-  match: RegExpExecArray,
-  cancel: boolean,
-): ParsedCommand | null {
-  if (match[1]) {
-    const name = normalizeCommandName(match[1].toLowerCase())
-    if (!name) {
-      return null
+/** Lines a command may appear on: not fenced, not quoted from elsewhere. */
+function commandLines(body: string): string[] {
+  const lines: string[] = []
+  let inFence = false
+
+  for (const raw of body.split('\n')) {
+    if (CODE_FENCE_PATTERN.test(raw)) {
+      inFence = !inFence
+      continue
     }
-    return { name, cancel }
+    if (inFence) {
+      continue
+    }
+
+    const line = raw.trim()
+    if (line.startsWith('>')) {
+      continue
+    }
+    lines.push(line)
   }
 
-  const removed = match[2]?.toLowerCase()
-  if (!removed) {
-    return null
-  }
-  const name = normalizeRemovedCommandName(removed)
-  if (!name) {
-    return null
-  }
-  return { name, cancel: false }
+  return lines
 }
 
 export function parseCommentCommands(body: string): ParsedCommand[] {
   const commands: ParsedCommand[] = []
-  const matches = [...body.matchAll(COMMAND_PATTERN)]
 
-  for (let i = 0; i < matches.length; i++) {
-    const match = matches[i]
-    const start = match.index! + match[0].length
-    const end = i + 1 < matches.length ? matches[i + 1].index! : body.length
-    const segment = body.slice(start, end)
-    const cancel = segment.toLowerCase().includes(' cancel')
+  for (const line of commandLines(body)) {
+    const match = line.match(COMMAND_LINE_PATTERN)
+    if (!match) {
+      continue
+    }
 
-    const parsed = parsedCommandFromMatch(match, cancel)
-    if (parsed) {
-      commands.push(parsed)
+    const cancel = /^\s*cancel\b/i.test(match[3] ?? '')
+
+    if (match[1]) {
+      const name = normalizeCommandName(match[1].toLowerCase())
+      if (name) {
+        commands.push({ name, cancel })
+      }
+      continue
+    }
+
+    const removed = match[2]?.toLowerCase()
+    const name = removed ? normalizeRemovedCommandName(removed) : null
+    if (name) {
+      commands.push({ name, cancel: false })
     }
   }
 

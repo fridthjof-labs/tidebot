@@ -135,5 +135,31 @@ export function managedLabels(config: BotConfig): Array<{
       color: '1d76db',
       description: `Changes under ${rule.prefix}`,
     })),
+    // Dependabot refuses to open a pull request with a label that does not
+    // exist, and the plugin will not approve one without this label — so a
+    // repository that requires it needs it created up front.
+    ...(config.plugins.dependabot && config.dependabot.requireDependenciesLabel
+      ? [
+          {
+            name: 'dependencies',
+            color: '0366d6',
+            description: 'Dependency update',
+          },
+        ]
+      : []),
+    ...(config.plugins.intake
+      ? [
+          ...config.intake.bugLabels.map((name) => ({
+            name,
+            color: 'd73a4a',
+            description: 'Something is broken',
+          })),
+          ...config.intake.featureLabels.map((name) => ({
+            name,
+            color: 'a2eeef',
+            description: 'New capability or improvement',
+          })),
+        ]
+      : []),
   ]
 }

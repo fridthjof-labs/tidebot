@@ -33,6 +33,31 @@ describe('parseCommentCommands', () => {
       { name: 'hold', cancel: true },
     ])
   })
+
+  it('ignores a command that is not at the start of a line', () => {
+    // `/help` output lists every command, so a body mentioning one is common.
+    expect(parseCommentCommands("please don't /approve this yet")).toEqual([])
+    expect(parseCommentCommands('see `/lgtm` in the docs')).toEqual([])
+  })
+
+  it('ignores commands inside a fenced code block', () => {
+    expect(parseCommentCommands('```\n/lgtm\n```')).toEqual([])
+    expect(parseCommentCommands('~~~\n/approve\n~~~')).toEqual([])
+  })
+
+  it('ignores commands in quoted text', () => {
+    expect(parseCommentCommands('> /lgtm\n> /approve')).toEqual([])
+  })
+
+  it('still reads a command that follows quoted text', () => {
+    expect(parseCommentCommands('> they said /approve\n\n/lgtm')).toEqual([
+      { name: 'lgtm', cancel: false },
+    ])
+  })
+
+  it('does not treat the help text as a batch of commands', () => {
+    expect(parseCommentCommands(commandHelp(config()))).toEqual([])
+  })
 })
 
 describe('isBotComment', () => {

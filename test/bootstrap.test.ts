@@ -154,7 +154,28 @@ describe('syncRepositoryLabels', () => {
     expect(result.created).toContain('lgtm')
     expect(result.created).toContain('size/xs')
     expect(result.created).toContain('area/src')
+    expect(result.created).toContain('bug')
     expect(createLabel).toHaveBeenCalled()
+  })
+
+  it('creates the dependencies label the dependabot plugin requires', async () => {
+    const { octokit } = octokitWith([])
+    const result = await syncRepositoryLabels(
+      octokit,
+      { owner: 'acme', repo: 'widget' },
+      config({ plugins: { dependabot: true } }),
+    )
+    expect(result.created).toContain('dependencies')
+  })
+
+  it('leaves the dependencies label alone when nothing needs it', async () => {
+    const { octokit } = octokitWith([])
+    const result = await syncRepositoryLabels(
+      octokit,
+      { owner: 'acme', repo: 'widget' },
+      config(),
+    )
+    expect(result.created).not.toContain('dependencies')
   })
 
   it('leaves a label that already matches alone', async () => {
