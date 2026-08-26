@@ -24,9 +24,19 @@ The generated workflow checks this repository out to get the bot's code, so
 reachable with a PAT you add to `actions/checkout` in the generated workflow.
 The hosted runtimes have no such requirement.
 
-Commit `.github/tidebot.yaml` and `.github/workflows/tidebot.yml`. Then create
-the labels the config refers to — either by hand, or with an App (below), or by
-letting the first `/lgtm` fail once and creating them from the error.
+Commit `.github/tidebot.yaml` and `.github/workflows/tidebot.yml`, then create
+the labels it refers to. No App is needed for this — the CLI falls back to
+`GITHUB_TOKEN` so a repository can be set up before one exists:
+
+```bash
+GITHUB_TOKEN=$(gh auth token) pnpm tidebot labels --repo my-org/my-repo
+GITHUB_TOKEN=$(gh auth token) pnpm tidebot doctor --repo my-org/my-repo
+```
+
+The generated workflow declares the permissions the bot needs. Many
+repositories default the workflow token to read-only, and a reusable workflow
+cannot be granted more than its caller has — so that block is load-bearing, not
+documentation.
 
 The bot acts as `github-actions[bot]`. Everything works except one thing: a
 push made with the job's own token does not re-trigger CI, by GitHub's own

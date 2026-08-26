@@ -2,6 +2,7 @@
 import { execFile } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { Octokit } from '@octokit/rest'
 import { buildContext } from '../core/bot.js'
 import { loadRepositoryConfig } from '../core/config/load.js'
 import {
@@ -9,6 +10,7 @@ import {
   createBotClients,
   credentialsFromEnv,
 } from '../core/github.js'
+import type { BotIdentity } from '../core/identity.js'
 import { resolveBotIdentity } from '../core/identity.js'
 import { sweepStalePullRequests } from '../core/plugins/stale.js'
 import type { RepoRef } from '../core/types.js'
@@ -49,6 +51,8 @@ Bootstrap
 
 Environment
   TIDEBOT_APP_ID, TIDEBOT_PRIVATE_KEY, TIDEBOT_WEBHOOK_SECRET
+  GITHUB_TOKEN            used by labels/doctor/config/stale-sweep when no App
+                          is configured, so a repository can be set up first
   TIDEBOT_ALLOWED_OWNERS  optional comma-separated owner allowlist
   PORT                    webhook port for \`serve\` (default 3000)
 `
@@ -57,7 +61,50 @@ async function clients(): Promise<BotClients> {
   return createBotClients(credentialsFromEnv())
 }
 
-async function contextFor(ref: RepoRef) {
+function hasAppCredentials(): boolean {
+  return Boolean(process.env.TIDEBOT_APP_ID && process.env.TIDEBOT_PRIVATE_KEY)
+}
+
+/** Stand-in identity when acting through a plain token rather than an App. */
+const TOKEN_IDENTITY: BotIdentity = {
+  appId: 0,
+  slug: 'tidebot',
+  name: 'Tidebot',
+  login: 'github-actions[bot]',
+}
+
+/**
+ * Authenticate as the App when it is configured, and fall back to a plain
+ * token otherwise. `labels`, `doctor`, and `config` are the setup path for a
+ * repository that has no App at all, so requiring one to run them would leave
+ * the zero-infrastructure install with no way to bootstrap itself.
+ */
+async function contextFor(ref: RepoRef): Promise<{
+  botClients: BotClients | null
+  installationId: number | null
+  ctx: Awaited<ReturnType<typeof buildContext>>
+}> {
+  if (!hasAppCredentials()) {
+    const token =
+      process.env.TIDEBOT_TOKEN ??
+      process.env.GITHUB_TOKEN ??
+      process.env.GH_TOKEN
+    if (!token) {
+      throw new Error(
+        'Set TIDEBOT_APP_ID and TIDEBOT_PRIVATE_KEY, or GITHUB_TOKEN, to reach the GitHub API',
+      )
+    }
+    return {
+      botClients: null,
+      installationId: null,
+      ctx: await buildContext({
+        octokit: new Octokit({ auth: token }),
+        ref,
+        identity: TOKEN_IDENTITY,
+      }),
+    }
+  }
+
   const botClients = await clients()
   const installationId = await botClients.getRepositoryInstallationId(ref)
   const octokit = await botClients.getInstallationOctokit(installationId)
@@ -141,26 +188,39 @@ async function commandDoctor(args: Args): Promise<void> {
   const ref = parseRepoFlag(requireFlag(args, 'repo'))
   const { botClients, installationId, ctx } = await contextFor(ref)
 
-  const app = await describeApp(botClients.app)
-  const { data: installation } = await botClients.app.octokit.request(
-    'GET /app/installations/{installation_id}',
-    { installation_id: installationId },
-  )
+  // Without App credentials the config and label checks still run; the
+  // permission and event checks simply have nothing to inspect.
+  const app = botClients ? await describeApp(botClients.app) : null
+  const installation =
+    botClients && installationId
+      ? (
+          await botClients.app.octokit.request(
+            'GET /app/installations/{installation_id}',
+            { installation_id: installationId },
+          )
+        ).data
+      : null
 
   const { findings } = await diagnose(ctx.octokit, ref, {
-    installation: {
-      permissions: installation.permissions as unknown as Record<
-        string,
-        string
-      >,
-      events: installation.events,
-    },
-    appEvents: app.events,
+    installation: installation
+      ? {
+          permissions: installation.permissions as unknown as Record<
+            string,
+            string
+          >,
+          events: installation.events,
+        }
+      : undefined,
+    appEvents: app?.events,
   })
 
-  console.log(`App        ${app.name} (${app.slug}, id ${app.id})`)
   console.log(
-    `Repository ${ref.owner}/${ref.repo} (installation ${installationId})\n`,
+    app
+      ? `App        ${app.name} (${app.slug}, id ${app.id})`
+      : 'App        none — checked with a plain token',
+  )
+  console.log(
+    `Repository ${ref.owner}/${ref.repo}${installationId ? ` (installation ${installationId})` : ''}\n`,
   )
 
   const icon = { ok: '✅', warn: '⚠️ ', error: '❌' }
