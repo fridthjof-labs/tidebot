@@ -1,0 +1,162 @@
+# Reusable workflow: rebase a pull request branch onto its base and sign every
+# rebased commit so GitHub marks it "Verified".
+#
+# A GitHub App cannot do this on its own. GitHub's automatic bot-commit signing
+# only applies when the App is both author and committer, which a rebase is
+# not: a rebase preserves the original author. GPG keys cannot be registered
+# against an App's `[bot]` identity either, so the signature has to come from a
+# real GitHub user account (a "machine user") whose verified email matches the
+# committer. See docs/signed-rebase.md.
+# Third-party actions are pinned to commit SHAs, not tags: a tag can be moved
+# to point at different code, and these jobs hold an App private key. Dependabot
+# updates the pins.
+name: Tidebot signed rebase
+
+on:
+  workflow_call:
+    inputs:
+      pull_number:
+        description: Pull request to rebase
+        required: true
+        type: string
+      git_user_name:
+        description: Committer name (the machine user)
+        required: true
+        type: string
+      git_user_email:
+        description: Committer email, verified on the machine user account
+        required: true
+        type: string
+    secrets:
+      app_id:
+        description: Tidebot App ID; without it the job uses github.token
+        required: false
+      private_key:
+        description: Tidebot App private key
+        required: false
+      gpg_private_key:
+        description: ASCII-armoured private key whose public half is on the machine user
+        required: true
+      gpg_passphrase:
+        description: Passphrase for gpg_private_key, when it has one
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    # The `secrets` context is not available in a step-level `if`, so whether
+    # App credentials were supplied is hoisted into the job environment here.
+    env:
+      HAS_APP: ${{ secrets.app_id != '' && 'true' || 'false' }}
+    steps:
+      # A push authenticated as the App re-triggers CI on the rebased branch.
+      # A push with the job's own GITHUB_TOKEN deliberately does not, so the
+      # App path is what makes the rebase useful.
+      - name: Mint installation token
+        id: token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.app_id }}
+          private-key: ${{ secrets.private_key }}
+
+      - name: Resolve pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token || github.token }}
+          PR: ${{ inputs.pull_number }}
+        run: |
+          set -euo pipefail
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" \
+            --json headRefName,baseRefName,headRepositoryOwner,isCrossRepository \
+            > pr.json
+          if [ "$(jq -r .isCrossRepository pr.json)" = "true" ]; then
+            echo "::error::Tidebot cannot rebase a pull request from a fork; it has no push access to the head branch."
+            exit 1
+          fi
+          {
+            echo "head=$(jq -r .headRefName pr.json)"
+            echo "base=$(jq -r .baseRefName pr.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ steps.pr.outputs.head }}
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ steps.token.outputs.token || github.token }}
+
+      - name: Import signing key
+        id: gpg
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.gpg_private_key }}
+          GPG_PASSPHRASE: ${{ secrets.gpg_passphrase }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="${RUNNER_TEMP}/gnupg"
+          mkdir -p "$GNUPGHOME"
+          chmod 700 "$GNUPGHOME"
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --quiet --import
+          KEY_ID="$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5; exit}')"
+          if [ -z "$KEY_ID" ]; then
+            echo "::error::No secret key found after import."
+            exit 1
+          fi
+          # Let git sign non-interactively with a passphrase-protected key.
+          echo 'allow-loopback-pinentry' >> "$GNUPGHOME/gpg-agent.conf"
+          echo 'pinentry-mode loopback' >> "$GNUPGHOME/gpg.conf"
+          gpg-connect-agent reloadagent /bye >/dev/null 2>&1 || true
+          {
+            echo "GNUPGHOME=$GNUPGHOME"
+          } >> "$GITHUB_ENV"
+          echo "key_id=$KEY_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Rebase and sign
+        id: rebase
+        env:
+          GPG_PASSPHRASE: ${{ secrets.gpg_passphrase }}
+          KEY_ID: ${{ steps.gpg.outputs.key_id }}
+          BASE: ${{ steps.pr.outputs.base }}
+          HEAD_REF: ${{ steps.pr.outputs.head }}
+          GIT_USER_NAME: ${{ inputs.git_user_name }}
+          GIT_USER_EMAIL: ${{ inputs.git_user_email }}
+        run: |
+          set -euo pipefail
+          git config user.name  "$GIT_USER_NAME"
+          git config user.email "$GIT_USER_EMAIL"
+          git config user.signingkey "$KEY_ID"
+          git config gpg.program gpg
+          if [ -n "${GPG_PASSPHRASE:-}" ]; then
+            # --passphrase-file, not --passphrase: an argv passphrase is
+            # readable from the process list for the life of the call.
+            umask 077
+            printf '%s' "$GPG_PASSPHRASE" > "${RUNNER_TEMP}/gpg-pass"
+            printf '#!/bin/sh\nexec gpg --batch --pinentry-mode loopback --passphrase-file "%s" "$@"\n' \
+              "${RUNNER_TEMP}/gpg-pass" > "${RUNNER_TEMP}/gpg-wrapper"
+            chmod +x "${RUNNER_TEMP}/gpg-wrapper"
+            git config gpg.program "${RUNNER_TEMP}/gpg-wrapper"
+          fi
+
+          git fetch origin "$BASE"
+          if ! git rebase --gpg-sign="$KEY_ID" "origin/$BASE"; then
+            git rebase --abort || true
+            echo "::error::Rebase hit a conflict with $BASE; resolve it locally."
+            echo "failed=conflict" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          git push --force-with-lease origin "HEAD:$HEAD_REF"
+
+      - name: Report failure on the pull request
+        if: failure()
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token || github.token }}
+          PR: ${{ inputs.pull_number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body \
+            "Signed rebase failed. See the [workflow run]($RUN_URL)."
