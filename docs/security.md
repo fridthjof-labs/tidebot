@@ -101,13 +101,20 @@ to all of them.
 - `minimumReleaseAge` keeps installs off packages published in the last week,
   which is where most npm account compromises are caught.
 
-### Pin the reusable workflows
+### The reusable workflows are pinned, in two places
 
-The generated caller workflows reference `…@main`. That follows this
-repository's default branch, so a change here runs in your repository with your
-token on the next event. Pin them to a tag or a commit SHA if you would rather
-review each change first — particularly the signed-rebase workflow, which holds
-both the App key and the signing key.
+A caller workflow pins twice, and both must move together:
+
+- `uses: …/run.yml@v0.1.0` selects the **workflow file**.
+- `with: ref: v0.1.0` selects the **bot code** that workflow checks out.
+
+Pinning only the first still runs whatever is on this repository's default
+branch. `tidebot init` writes both. Moving to a newer version is a one-line
+change you review, not something that happens to you.
+
+Pin to a commit SHA rather than a tag if you want to defend against a tag being
+moved — a tag in this repository can be repointed by anyone who can push tags
+here.
 
 ## Rate limits as a safety property
 
