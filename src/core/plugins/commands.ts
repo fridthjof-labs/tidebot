@@ -18,7 +18,6 @@ import { isForkPullRequest, updateBranch } from '../lib/rebase.js'
 import type { CommandOutcome } from '../lib/summary.js'
 import { formatCommandReply } from '../lib/summary.js'
 import type { CommentContext, ParsedCommand } from '../types.js'
-import { upsertPipelineSummaryComment } from './pipeline.js'
 
 function labelForCommand(
   ctx: BotContext,
@@ -247,9 +246,8 @@ export async function handleIssueCommentCommand(
     await commentOnIssue(ctx.octokit, ctx.ref, comment.issueNumber, reply)
   }
 
-  if (outcomes.length > 0) {
-    await upsertPipelineSummaryComment(ctx, comment.issueNumber)
-  }
-
+  // The caller re-runs the full pull request pass when this returns true, and
+  // that pass refreshes the summary — rendering it here too would double every
+  // command's API cost against a quota the whole installation shares.
   return outcomes.length > 0
 }

@@ -62,15 +62,20 @@ export async function generateSigningKey(options: {
       throw new Error('gpg did not report a key id')
     }
 
-    const exportArgs = options.passphrase
-      ? [
-          '--batch',
-          '--pinentry-mode',
-          'loopback',
-          '--passphrase',
-          options.passphrase,
-        ]
-      : ['--batch']
+    // --passphrase-file, not --passphrase: an argv passphrase is readable
+    // from the process list by any other user on the machine.
+    let exportArgs = ['--batch']
+    if (options.passphrase) {
+      const passphrasePath = join(home, 'passphrase')
+      await writeFile(passphrasePath, options.passphrase, { mode: 0o600 })
+      exportArgs = [
+        '--batch',
+        '--pinentry-mode',
+        'loopback',
+        '--passphrase-file',
+        passphrasePath,
+      ]
+    }
 
     const [{ stdout: publicKey }, { stdout: privateKey }] = await Promise.all([
       run('gpg', [...exportArgs, '--armor', '--export', keyId], { env }),

@@ -268,6 +268,34 @@ describe('handlePullRequest', () => {
     expect(state.comments[0].body).toMatch('### Pipeline status')
   })
 
+  it('renders the pipeline summary once per command, not twice', async () => {
+    // Each render is roughly ten API calls against a quota the whole
+    // installation shares, so a duplicate is a real cost, not a cosmetic one.
+    const { handleIssueComment } = await import('../src/core/bot.js')
+    const pr = pullRequest()
+    const state: FakeState = {
+      pr,
+      labels: [],
+      checkRuns: GREEN,
+      changedPaths: ['src/a.ts'],
+      comments: [],
+    }
+    const { octokit, createComment } = fakeOctokit(state)
+
+    await handleIssueComment(context({ octokit }), {
+      body: '/hold',
+      commentId: 1,
+      issueNumber: 42,
+      authorAssociation: 'MEMBER',
+      userLogin: 'maintainer',
+    })
+
+    const summaries = createComment.mock.calls.filter(
+      ([args]: [{ body: string }]) => args.body.includes('### Pipeline status'),
+    )
+    expect(summaries).toHaveLength(1)
+  })
+
   it('never edits or deletes a comment it did not write', async () => {
     // `issues: write` lets the App edit and delete anyone's comment, so
     // matching a marker alone would hand control of the bot's own bookkeeping
