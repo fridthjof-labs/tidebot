@@ -1,0 +1,70 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tidebot",
+  "main": "./src/runtime/worker.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "workers_dev": true,
+  "exports": {
+    "WebhookDelivery": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TIDEBOT_WEBHOOK_DELIVERIES",
+        "class_name": "WebhookDelivery"
+      }
+    ]
+  },
+  "queues": {
+    "producers": [
+      { "binding": "TIDEBOT_WEBHOOK_QUEUE", "queue": "tidebot-webhooks" }
+    ],
+    "consumers": [
+      {
+        "queue": "tidebot-webhooks",
+        "max_batch_size": 10,
+        "max_batch_timeout": 1,
+        "max_retries": 10,
+        "retry_delay": 60,
+        "dead_letter_queue": "tidebot-webhooks-dlq"
+      }
+    ]
+  },
+  "env": {
+    "preview": {
+      "name": "tidebot-preview",
+      "workers_dev": true,
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "TIDEBOT_WEBHOOK_DELIVERIES",
+            "class_name": "WebhookDelivery"
+          }
+        ]
+      },
+      "queues": {
+        "producers": [
+          {
+            "binding": "TIDEBOT_WEBHOOK_QUEUE",
+            "queue": "tidebot-webhooks-preview"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "tidebot-webhooks-preview",
+            "max_batch_size": 10,
+            "max_batch_timeout": 1,
+            "max_retries": 10,
+            "retry_delay": 60,
+            "dead_letter_queue": "tidebot-webhooks-preview-dlq"
+          }
+        ]
+      }
+    }
+  }
+}

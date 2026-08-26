@@ -1,0 +1,8 @@
+# Do not install a version published in the last week. Most npm account
+# compromises are caught and unpublished well inside that window, and nothing
+# here needs a same-day dependency.
+minimumReleaseAge: 10080
+
+allowBuilds:
+  esbuild: true
+  workerd: true

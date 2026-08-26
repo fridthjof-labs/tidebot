@@ -1,0 +1,37 @@
+# Static analysis. Tidebot holds write access to pull requests and contents on
+# every repository it is installed on, so an injection or a bad flow here is
+# not contained to this repository.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Findings arrive from new queries, not only from new code.
+    - cron: '23 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: analyze
+    runs-on: ubuntu-latest
+    # Code scanning needs Advanced Security, which private repositories do not
+    # have. Skipping keeps the check honest while this repository is private,
+    # and it starts working the moment it is public — no edit required.
+    if: github.event.repository.visibility == 'public'
+    permissions:
+      security-events: write
+      contents: read
+      # CodeQL reads its own workflow run to establish context; without this
+      # it fails with "Resource not accessible by integration".
+      actions: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
