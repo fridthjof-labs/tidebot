@@ -22,10 +22,5 @@ jobs:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
-          # v5.0.0 requires this explicitly — without it the action fails with
-          # "Input required and not supplied: token". GITHUB_TOKEN means the
-          # release commit does not start another workflow run, which is what
-          # stops a release from re-triggering this job.
-          token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
