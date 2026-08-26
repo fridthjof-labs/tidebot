@@ -222,6 +222,41 @@ describe('stale rules', () => {
     )
   })
 
+  it('does not close when it cannot tell whether anyone is active', async () => {
+    // A transient API failure must not be read as "nobody commented". Closing
+    // is not reversible by the person it surprises.
+    const { octokit, update, addLabels } = octokitWithLastCommit(40)
+    octokit.rest.issues.listComments = vi.fn(async () => {
+      throw Object.assign(new Error('API rate limit exceeded'), { status: 403 })
+    })
+
+    await applyStaleRules(
+      context({ octokit: octokit as never, config: staleConfig }),
+      1,
+      pullRequest({ labels: [{ name: 'stale' }] }),
+      now,
+    )
+
+    expect(update).not.toHaveBeenCalled()
+    expect(addLabels).not.toHaveBeenCalled()
+  })
+
+  it('does not label stale when the comment lookup fails', async () => {
+    const { octokit, addLabels } = octokitWithLastCommit(40)
+    octokit.rest.issues.listComments = vi.fn(async () => {
+      throw new Error('network unreachable')
+    })
+
+    await applyStaleRules(
+      context({ octokit: octokit as never, config: staleConfig }),
+      1,
+      pullRequest(),
+      now,
+    )
+
+    expect(addLabels).not.toHaveBeenCalled()
+  })
+
   it('leaves an exempt pull request alone however old', async () => {
     const { octokit, addLabels } = octokitWithLastCommit(500)
     await applyStaleRules(

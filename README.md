@@ -92,9 +92,12 @@ proxies it, naming who asked, so a solo maintainer still gets a green check.
 - **Dependabot** — safe updates (non-major, expected paths, checks green) get
   the merge labels. Ones that are one branch-update or CI re-run away get that
   automatically. Hard blockers are left for a human.
-- **Stale** — inactive PRs are labelled, then closed. Inactivity is measured
-  from the last commit on the branch, not `updated_at`, which the bot's own
-  activity would otherwise keep resetting.
+- **Stale** — inactive PRs are labelled, then closed. Activity means a commit
+  on the branch *or* a comment from a human — `/help` says "comment or push to
+  keep it open", so both have to count. Bot comments and `updated_at` are
+  ignored, since the bot's own activity would otherwise keep an abandoned PR
+  looking alive. Coming back withdraws the label, and if activity cannot be
+  established at all, nothing is labelled or closed.
 - **Pipeline comment** — one upserted comment per PR with preview
   deployments, CI status, an optional infrastructure plan, and the merge gate.
 

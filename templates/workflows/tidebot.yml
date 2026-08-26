@@ -52,12 +52,12 @@ jobs:
        github.event.workflow_run.name != 'Tidebot') &&
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
-    # Two pins, and they must move together: `@v0.1.0` selects the workflow
-    # file, `ref` selects the bot code that workflow checks out. Pinning only
+    # Two pins, and they must move together: `@vX.Y.Z` selects the workflow
+    # file, `ref: vX.Y.Z` selects the bot code that workflow checks out. Pinning only
     # the first would still run whatever is on the default branch.
-    uses: fridthjof-labs/tidebot/.github/workflows/run.yml@v0.1.0
+    uses: fridthjof-labs/tidebot/.github/workflows/run.yml@v0.1.0 # x-release-please-version
     with:
-      ref: v0.1.0
+      ref: v0.1.0 # x-release-please-version
     secrets:
       # Optional: set these to act as the Tidebot App rather than
       # github-actions[bot]. Without them everything still works, except that

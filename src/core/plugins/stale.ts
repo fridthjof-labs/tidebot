@@ -51,16 +51,24 @@ async function getLastPushDate(
 }
 
 /**
- * The most recent comment from a human, or null if there is none.
+ * The most recent comment from a human.
  *
  * Bot comments are excluded deliberately: Tidebot's own pipeline summary and
  * CI notifications would otherwise keep an abandoned pull request looking
  * alive forever, which is the reason `updated_at` is unusable here.
+ *
+ * A failure is reported rather than swallowed. Returning "no comments" when
+ * the API refused would let a transient error close a pull request somebody
+ * is actively discussing — the caller must be able to tell the two apart.
  */
+type HumanActivity =
+  | { known: true; at: string | null }
+  | { known: false; reason: string }
+
 async function lastHumanCommentAt(
   ctx: BotContext,
   pullNumber: number,
-): Promise<string | null> {
+): Promise<HumanActivity> {
   try {
     const { data: comments } = await ctx.octokit.rest.issues.listComments({
       owner: ctx.ref.owner,
@@ -70,12 +78,17 @@ async function lastHumanCommentAt(
       sort: 'created',
       direction: 'desc',
     })
-    return (
-      comments.find((comment) => !isBotComment(comment.user?.login))
-        ?.created_at ?? null
-    )
-  } catch {
-    return null
+    return {
+      known: true,
+      at:
+        comments.find((comment) => !isBotComment(comment.user?.login))
+          ?.created_at ?? null,
+    }
+  } catch (error) {
+    return {
+      known: false,
+      reason: error instanceof Error ? error.message : String(error),
+    }
   }
 }
 
@@ -110,9 +123,23 @@ export async function applyStaleRules(
 
   // "Comment or push to keep it open" has to be true, so a human comment
   // counts as activity exactly like a commit does.
-  const commentAt = await lastHumanCommentAt(ctx, pullNumber)
-  const inactiveDays = commentAt
-    ? Math.min(branchIdleDays, daysSince(commentAt, now))
+  const activity = await lastHumanCommentAt(ctx, pullNumber)
+  if (!activity.known) {
+    // Labelling or closing now would be a decision made on incomplete
+    // evidence, and closing is not reversible by the person it surprises.
+    console.error(
+      JSON.stringify({
+        message: 'tidebot stale check skipped: could not read comments',
+        repository: `${ctx.ref.owner}/${ctx.ref.repo}`,
+        pull: pullNumber,
+        error: activity.reason,
+      }),
+    )
+    return
+  }
+
+  const inactiveDays = activity.at
+    ? Math.min(branchIdleDays, daysSince(activity.at, now))
     : branchIdleDays
 
   if (inactiveDays < stale.daysUntilStale) {

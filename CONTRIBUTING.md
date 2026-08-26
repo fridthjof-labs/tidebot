@@ -84,3 +84,16 @@ type checker do the narrowing instead of `!` or `as`.
 the `uses:` ref and the `with: ref:` that selects the checked-out code. Both
 move together when you cut a release. See
 [docs/security.md](docs/security.md#the-reusable-workflows-are-pinned-in-two-places).
+
+Releases are automated by
+[Release Please](https://github.com/googleapis/release-please). Every push to
+`main` updates a release pull request; merging it updates the changelog and
+package version, tags the commit, and publishes the GitHub Release. Nobody
+picks a version by hand — it comes from Conventional Commit subjects since the
+last release. While Tidebot is pre-1.0, a `!` breaking change bumps the minor
+rather than the major.
+
+The release pull request uses `GITHUB_TOKEN`, so GitHub does not start another
+workflow for commits it creates. The same checks run on every push to `main` as
+well as on ordinary pull requests, so every commit that can be tagged is
+covered.

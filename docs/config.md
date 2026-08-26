@@ -258,8 +258,17 @@ stale:
   exemptLabels: [hold, pinned, dependencies]
 ```
 
-Inactivity is the age of the last commit on the branch. `updated_at` would be
-reset by the bot's own comments and by every CI run.
+Activity is the most recent commit on the branch *or* comment from a human,
+whichever is later. Bot comments do not count, and neither does `updated_at` —
+both are reset by Tidebot's own pipeline comment and by every CI run, which
+would keep an abandoned pull request alive indefinitely.
+
+Commenting on a stale pull request withdraws the label. If the comment lookup
+fails, nothing is labelled or closed: a decision to close cannot be made on
+evidence Tidebot could not read.
+
+The comment lookup only runs once a pull request is already a candidate by
+branch age, so the common path costs no extra API call.
 
 Closing needs a scheduled sweep — see [install.md](install.md#stale-sweeps).
 
