@@ -18,6 +18,10 @@ jobs:
   analyze:
     name: analyze
     runs-on: ubuntu-latest
+    # Code scanning needs Advanced Security, which private repositories do not
+    # have. Skipping keeps the check honest while this repository is private,
+    # and it starts working the moment it is public — no edit required.
+    if: github.event.repository.visibility == 'public'
     permissions:
       security-events: write
       contents: read
