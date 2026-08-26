@@ -21,6 +21,9 @@ jobs:
     permissions:
       security-events: write
       contents: read
+      # CodeQL reads its own workflow run to establish context; without this
+      # it fails with "Resource not accessible by integration".
+      actions: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
