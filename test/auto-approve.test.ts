@@ -102,6 +102,19 @@ describe('auto-approve rules', () => {
     )
   })
 
+  it('allows an unstable pull request when its explicit checks pass', () => {
+    expect(evaluate(DOCS_RULE, { mergeable_state: 'unstable' }).safe).toBe(true)
+  })
+
+  it('refuses a pull request with conflicts', () => {
+    expect(
+      evaluate(DOCS_RULE, {
+        mergeable: false,
+        mergeable_state: 'dirty',
+      }).reasons,
+    ).toContain('PR is not merge-ready')
+  })
+
   it('honours maxChangedLines', () => {
     const rule = { ...DOCS_RULE, maxChangedLines: 5 }
     expect(evaluate(rule, { additions: 10, deletions: 2 }).safe).toBe(false)

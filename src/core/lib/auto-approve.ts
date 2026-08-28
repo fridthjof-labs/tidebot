@@ -23,7 +23,7 @@ export function isMergeReady(pr: PullRequest): boolean {
   if (pr.draft || pr.state !== 'open' || pr.mergeable === false) {
     return false
   }
-  return !pr.mergeable_state || pr.mergeable_state === 'clean'
+  return pr.mergeable_state !== 'dirty'
 }
 
 export function missingApprovalLabels(
