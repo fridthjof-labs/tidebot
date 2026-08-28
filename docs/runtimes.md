@@ -17,11 +17,10 @@ the GitHub API, so nothing about which repository a build serves is baked in.
 webhook runtimes use. There is no signature to verify: GitHub authenticated the
 delivery by starting the job.
 
-Without App credentials it authenticates as `github-actions[bot]` using the
-job's `GITHUB_TOKEN`. Everything works except that pushes made with that token
-do not trigger workflows, so an auto-rebase updates the branch without re-running
-CI. Setting `TIDEBOT_APP_ID` and `TIDEBOT_PRIVATE_KEY` as repository secrets
-switches it to the App and restores that.
+It authenticates as `github-actions[bot]` using the job's `GITHUB_TOKEN`.
+Pushes made with that token do not trigger workflows, so an auto-rebase updates
+the branch without re-running CI. Use a hosted runtime when that limitation
+matters.
 
 The generated workflow serialises per pull request with a `concurrency` group,
 so two events cannot both try to merge the same PR.

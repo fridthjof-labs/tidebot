@@ -1,7 +1,6 @@
-# Tidebot, running inside this repository — no hosted webhook receiver needed.
-#
-# Delete this file if the repository is served by a hosted Tidebot instance
-# instead; running both would double every action.
+# Tidebot running on itself. This is the template in templates/workflows/,
+# with one change: the reusable workflow is referenced as a local path, which
+# is how a repository calls one of its own.
 name: Tidebot
 
 on:
@@ -52,9 +51,7 @@ jobs:
        github.event.workflow_run.name != 'Tidebot') &&
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
-    # Two pins, and they must move together: `@vX.Y.Z` selects the workflow
-    # file, and `ref: vX.Y.Z` selects the bot code that workflow checks out.
-    # Pinning only the first would still run the default branch.
-    uses: fridthjof-labs/tidebot/.github/workflows/run.yml@v0.1.1 # x-release-please-version
-    with:
-      ref: v0.1.1 # x-release-please-version
+    # A local path, and no `ref`: this repository dogfoods whatever is on its
+    # own default branch. No App secrets are passed, so the canonical identity
+    # is always github-actions[bot].
+    uses: ./.github/workflows/run.yml

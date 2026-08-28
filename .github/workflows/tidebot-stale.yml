@@ -39,6 +39,4 @@ jobs:
       - working-directory: .tidebot
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          TIDEBOT_APP_ID: ${{ secrets.TIDEBOT_APP_ID }}
-          TIDEBOT_PRIVATE_KEY: ${{ secrets.TIDEBOT_PRIVATE_KEY }}
         run: pnpm exec tsx src/cli/index.ts stale-sweep --repo "$GITHUB_REPOSITORY"
