@@ -17,7 +17,7 @@ jobs:
   rebase:
     # Pinned: this job holds the App key and the signing key, so it must not
     # follow a moving branch.
-    uses: fridthjof-labs/tidebot/.github/workflows/signed-rebase.yml@v0.1.5 # x-release-please-version
+    uses: fridthjof-labs/tidebot/.github/workflows/signed-rebase.yml@v0.1.6 # x-release-please-version
     with:
       pull_number: ${{ inputs.pull_number }}
       git_user_name: ${{ vars.TIDEBOT_GIT_USER_NAME }}
