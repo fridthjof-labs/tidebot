@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/fridthjof-labs/tidebot/compare/v0.1.5...v0.1.6) (2026-08-28)
+
+
+### Bug Fixes
+
+* verify collaborator permission for commands ([#23](https://github.com/fridthjof-labs/tidebot/issues/23)) ([1ce7a4f](https://github.com/fridthjof-labs/tidebot/commit/1ce7a4fd51a640d7a7d7179f6b0c2cc746e56901))
+
 ## [0.1.5](https://github.com/fridthjof-labs/tidebot/compare/v0.1.4...v0.1.5) (2026-08-28)
 
 
