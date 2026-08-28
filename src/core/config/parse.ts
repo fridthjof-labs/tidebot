@@ -27,7 +27,7 @@ const SECTION_KEYS = {
     'policies',
   ],
   signedRebase: ['workflowFile', 'ref'],
-  plan: Object.keys(DEFAULT_CONFIG.plan),
+  plan: [...Object.keys(DEFAULT_CONFIG.plan), 'workflowFile'],
   pipeline: ['deployWorkflowName', 'previewApps'],
   stale: Object.keys(DEFAULT_CONFIG.stale),
   dependabot: Object.keys(DEFAULT_CONFIG.dependabot),
