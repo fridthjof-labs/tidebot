@@ -58,6 +58,11 @@ describe('config validation', () => {
     ).toBe('signed-rebase')
   })
 
+  it('accepts the documented plan workflow file', () => {
+    const config = parseConfig('plan:\n  workflowFile: infra.yml')
+    expect(config.plan.workflowFile).toBe('infra.yml')
+  })
+
   it('refuses an auto-approve rule that constrains nothing', () => {
     expect(() =>
       parseConfig('autoApprove:\n  rules:\n    - name: everything'),
