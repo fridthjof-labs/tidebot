@@ -6,6 +6,12 @@
 
 Prow-style repository automation for GitHub, without Kubernetes.
 
+[CI](https://github.com/fridthjof-labs/tidebot/actions/workflows/ci.yml) ·
+[CodeQL](https://github.com/fridthjof-labs/tidebot/actions/workflows/codeql.yml) ·
+[Latest release](https://github.com/fridthjof-labs/tidebot/releases/latest) ·
+[MIT licence](LICENSE) · [Install](docs/install.md) ·
+[Configuration](docs/config.md) · [Security](SECURITY.md)
+
 Tidebot is the merge-automation half of [Prow](https://docs.prow.k8s.io) —
 `/lgtm` and `/approve` commands, size and area labels, a Tide-style merge gate,
 Dependabot handling, stale sweeps — as a single GitHub App that runs on a
