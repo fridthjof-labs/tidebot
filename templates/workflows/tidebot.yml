@@ -55,6 +55,6 @@ jobs:
     # Two pins, and they must move together: `@vX.Y.Z` selects the workflow
     # file, and `ref: vX.Y.Z` selects the bot code that workflow checks out.
     # Pinning only the first would still run the default branch.
-    uses: fridthjof-labs/tidebot/.github/workflows/run.yml@v0.1.3 # x-release-please-version
+    uses: fridthjof-labs/tidebot/.github/workflows/run.yml@v0.1.4 # x-release-please-version
     with:
-      ref: v0.1.3 # x-release-please-version
+      ref: v0.1.4 # x-release-please-version
