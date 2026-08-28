@@ -4,188 +4,84 @@
 
 # Tidebot
 
-Prow-style repository automation for GitHub, without Kubernetes.
+[![Quality](https://github.com/fridthjof-labs/tidebot/actions/workflows/ci.yml/badge.svg)](https://github.com/fridthjof-labs/tidebot/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/fridthjof-labs/tidebot)](https://github.com/fridthjof-labs/tidebot/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[CI](https://github.com/fridthjof-labs/tidebot/actions/workflows/ci.yml) ·
-[CodeQL](https://github.com/fridthjof-labs/tidebot/actions/workflows/codeql.yml) ·
-[Latest release](https://github.com/fridthjof-labs/tidebot/releases/latest) ·
-[MIT licence](LICENSE) · [Install](docs/install.md) ·
-[Configuration](docs/config.md) · [Security](SECURITY.md)
+Small GitHub pull-request automation inspired by Prow, without Kubernetes.
+Tidebot applies labels, handles review commands, and squash-merges ready pull
+requests. It reads your existing checks; it never checks out or runs pull
+request code.
 
-Tidebot is the merge-automation half of [Prow](https://docs.prow.k8s.io) —
-`/lgtm` and `/approve` commands, size and area labels, a Tide-style merge gate,
-Dependabot handling, stale sweeps — as a single GitHub App that runs on a
-Cloudflare Worker, a Node process, or nothing at all but GitHub Actions.
-
-Prow is excellent and needs a Kubernetes cluster, a control plane, and a
-Postgres or in-cluster state store to run it. Tidebot targets the case where
-that is the wrong shape: a handful of repositories across a few organisations
-that want the same review discipline without the same operational surface.
-
-| | Prow | Tidebot |
-| --- | --- | --- |
-| Runtime | Kubernetes cluster | Worker, Node, or GitHub Actions |
-| State | In-cluster | GitHub + seven-day webhook replay records |
-| Config | Cluster-wide `config.yaml` | `.github/tidebot.yaml` per repo, layered over the org |
-| Jobs | Runs your CI | Reads your CI; never runs it |
-
-Tidebot never executes repository code. It reads check results and acts on
-labels, comments, and merges, so an install is not a new place for a build to
-run.
+It can run in GitHub Actions for one repository, or as a GitHub App on a
+Cloudflare Worker or Node process for several repositories.
 
 ## Install
 
-Until the first public package is published, run the CLI from a clone:
+Requires Node 22+ and pnpm. Until the npm package is published, run the CLI
+from a clone:
 
 ```bash
-git clone https://github.com/fridthjof-labs/tidebot && cd tidebot && pnpm install
-```
-
-After publication, run the same CLI as `npx @fridthjof-labs/tidebot …`.
-
-Then, for the target repository:
-
-```bash
+git clone https://github.com/fridthjof-labs/tidebot && cd tidebot
+pnpm install
 pnpm tidebot init --dir ../my-repo --actions
 ```
 
-That writes `.github/tidebot.yaml` and a workflow that runs Tidebot inside the
-repository — no App, no hosting, no secrets. Commit it and `/lgtm` works.
-
-For a hosted instance across several repositories, or to act as a named bot
-rather than `github-actions[bot]`, register the App:
+This writes `.github/tidebot.yaml` and `.github/workflows/tidebot.yml` in the
+target repository. Create its labels and verify the installation:
 
 ```bash
-pnpm tidebot app create --org my-org --webhook-url https://hooks.example.com/webhooks/github
+GITHUB_TOKEN="$(gh auth token)" pnpm tidebot labels --repo my-org/my-repo
+GITHUB_TOKEN="$(gh auth token)" pnpm tidebot doctor --repo my-org/my-repo
 ```
 
-Full paths, including the hosted deployment, are in [docs/install.md](docs/install.md).
+Commit the generated files. GitHub Actions is enough for one repository and
+needs no App or hosting. For several repositories, a named bot identity, or
+automatic CI after a branch update, use the [App or hosted setup](docs/install.md).
 
-## Commands
+## Use
 
-| Command | Effect |
-| --- | --- |
-| `/lgtm`, `/lgm` | add the `lgtm` label |
-| `/lgtm cancel`, `/remove-lgtm` | remove it |
-| `/approve` | add `approved` and submit an APPROVE review from the bot |
-| `/approve cancel`, `/remove-approve` | remove the label and dismiss the review |
-| `/hold` | block auto-merge |
-| `/unhold`, `/remove-hold` | allow it again |
-| `/retest` | how to re-run CI on this branch |
-| `/rebase` | bring the branch onto its base |
-| `/plan` | run the configured plan workflow on this branch |
-| `/deploy` | run the configured preview deploy workflow |
-| `/bug`, `/feature` | turn an issue comment into a structured, labelled issue |
-| `/help` | list the commands this repository actually has |
-
-Only `MEMBER`, `OWNER`, and `COLLABORATOR` may run commands by default.
-`/plan` and `/deploy` appear only when their workflow is configured.
-
-`/approve` also submits a review because GitHub refuses self-approval: the bot
-proxies it, naming who asked, so a solo maintainer still gets a green check.
-
-## Automatic behaviour
-
-- **Size labels** `size/xs` … `size/xl` from the diff.
-- **Area labels** from changed paths, per configured rule.
-- **Merge gate** — squash-merges when the required labels are present, no
-  blocking label is set, required checks pass, and GitHub reports the PR
-  mergeable. Per-label policies can require a different check set.
-- **Auto-rebase** — when the base branch moves, already-approved PRs are
-  brought forward so their checks re-run without a manual click.
-- **Auto-approve rules** — declarative: a rule matching authors and/or paths,
-  with its own required checks, applies the merge labels. This covers
-  docs-only changes, generated-content commits, and anything else you can
-  describe by author and path.
-- **Dependabot** — safe updates (non-major, expected paths, checks green) get
-  the merge labels. Ones that are one branch-update or CI re-run away get that
-  automatically. Hard blockers are left for a human.
-- **Stale** — inactive PRs are labelled, then closed. Activity means a commit
-  on the branch *or* a comment from a human — `/help` says "comment or push to
-  keep it open", so both have to count. Bot comments and `updated_at` are
-  ignored, since the bot's own activity would otherwise keep an abandoned PR
-  looking alive. Coming back withdraws the label, and if activity cannot be
-  established at all, nothing is labelled or closed.
-- **Pipeline comment** — one upserted comment per PR with preview
-  deployments, CI status, an optional infrastructure plan, and the merge gate.
-
-## Configuration
-
-Everything above is off or empty by default until a repository asks for it. A
-repository with no config gets size labels, area labels, commands, and a merge
-gate of `lgtm` + `approved` with no required checks.
+Choose the checks and labels that gate a merge:
 
 ```yaml
 # .github/tidebot.yaml
 tide:
-  requiredContexts: [Quality / check]
+  mergeMethod: squash
+  requiredContexts: [check]
 
 autoApprove:
   rules:
     - name: docs
       paths: ['**/*.md', LICENSE]
-      excludePaths: ['infra/**']
-      requiredContexts: [Quality / check]
+      requiredContexts: [check]
 ```
 
-Config is layered: built-in defaults, then `.github/tidebot.yaml` in the
-organisation's `.github` repository, then the repository's own. Objects merge;
-arrays replace, so a repository narrowing `requiredContexts` gets exactly its
-own list. Full reference: [docs/config.md](docs/config.md).
+`requiredContexts` uses the Check Runs API name—normally the job name, such as
+`check`. Run `pnpm tidebot init` to list the check names already present in a
+repository.
 
-## Runtimes
+On a pull request, collaborators can use `/lgtm`, `/approve`, `/hold`,
+`/rebase`, and `/retest`. Optional `/plan`, `/deploy`, `/bug`, and `/feature`
+commands appear only when configured. A merge needs the required labels, green
+checks, and GitHub to report it mergeable.
 
-| | Use when | Setup |
-| --- | --- | --- |
-| **GitHub Actions** | One repository, or no infrastructure | One workflow file |
-| **Cloudflare Worker** | Many repositories, instant response | App + `wrangler deploy` |
-| **Node** | Self-hosted, behind your own network | App + a process and a tunnel |
-
-All three run the same core. See [docs/runtimes.md](docs/runtimes.md).
-
-## Signed rebase
-
-`/rebase` defaults to GitHub's update-branch API, which merges the base into
-the branch. Set `commands.updateBranchMethod: signed-rebase` and Tidebot
-instead dispatches a workflow that performs a real linear rebase and GPG-signs
-every commit, so the branch stays linear and GitHub marks it Verified.
-
-This needs a machine user, because GitHub will not verify a signature against
-an App's `[bot]` identity. The reasoning and the setup are in
-[docs/signed-rebase.md](docs/signed-rebase.md).
+Tidebot also provides size and area labels, declarative auto-approval,
+Dependabot handling, stale pull-request sweeps, and one pipeline-status
+comment per pull request.
 
 ## Security
 
-Tidebot never checks out or executes repository code, and it reads its
-configuration from the default branch — so a pull request cannot change the
-rules that govern it. Commands are gated on GitHub's own `author_association`
-and must start a line, so quoting a comment cannot run them.
-
-The full trust model, including what is deliberately *not* defended against,
-is in [docs/security.md](docs/security.md). Report vulnerabilities per
+Tidebot reads configuration from the default branch, gates commands on
+GitHub's collaborator association, and never executes pull-request code.
+Read the [security model](docs/security.md) and report vulnerabilities through
 [SECURITY.md](SECURITY.md).
-
-## Diagnosing an install
-
-```bash
-pnpm tidebot doctor --repo my-org/my-repo
-```
-
-Reports missing permissions, missing event subscriptions, missing labels, a
-config that failed to parse, and workflows a command refers to but that do not
-exist — the failures that otherwise look like the bot silently ignoring you.
 
 ## Development
 
 ```bash
-pnpm install
-pnpm check      # lint, typecheck, tests with coverage thresholds
-pnpm serve      # local webhook receiver on :3000
+pnpm check
 ```
 
-Architecture, the invariants that must not be broken, and how to add a plugin
-are in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Licence
-
-MIT.
+See [installation](docs/install.md), [configuration](docs/config.md),
+[runtimes](docs/runtimes.md), [signed rebase](docs/signed-rebase.md), and
+[contributing](CONTRIBUTING.md). Licensed under the [MIT License](LICENSE).

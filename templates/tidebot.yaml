@@ -45,16 +45,16 @@ commands:
 #     - name: docs
 #       paths: ['**/*.md', LICENSE, .gitignore]
 #       excludePaths: ['infra/**']
-#       requiredContexts: [Quality / check]
+#       requiredContexts: [check]
 #     - name: generated-content
 #       authors: ['${bot}']       # this App's own [bot] login
 #       paths: ['src/content/generated/**']
-#       requiredContexts: [Quality / check]
+#       requiredContexts: [check]
 
 # dependabot:
 #   enabled: true
 #   autoApprove: true
-#   requiredContexts: [Quality / check]
+#   requiredContexts: [check]
 #   allowMajorUpdates: false
 
 # stale:
