@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/fridthjof-labs/tidebot/compare/v0.1.4...v0.1.5) (2026-08-28)
+
+
+### Bug Fixes
+
+* support canonical Actions and Worker runtimes ([#19](https://github.com/fridthjof-labs/tidebot/issues/19)) ([7353f45](https://github.com/fridthjof-labs/tidebot/commit/7353f45f6d4c32c84918e280523ccc3ab265ee28))
+
 ## [0.1.4](https://github.com/fridthjof-labs/tidebot/compare/v0.1.3...v0.1.4) (2026-08-28)
 
 
