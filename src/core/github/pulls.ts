@@ -9,6 +9,23 @@ export async function getRepository(
   return { defaultBranch: data.default_branch, private: data.private }
 }
 
+export async function hasRepositoryWriteAccess(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  username: string,
+): Promise<boolean> {
+  try {
+    const { data } = await octokit.rest.repos.getCollaboratorPermissionLevel({
+      owner,
+      repo,
+      username,
+    })
+    return ['write', 'maintain', 'admin'].includes(data.permission)
+  } catch {
+    return false
+  }
+}
+
 export async function getPullRequestLabels(
   octokit: Octokit,
   { owner, repo }: RepoRef,

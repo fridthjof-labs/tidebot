@@ -5,6 +5,7 @@ import {
   dispatchWorkflow,
   fetchPullRequest,
   getPullRequestLabels,
+  hasRepositoryWriteAccess,
   submitPullRequestApproval,
 } from '../github.js'
 import {
@@ -188,9 +189,25 @@ async function executeCommentCommand(
   }
 }
 
-export function isTrusted(ctx: BotContext, comment: CommentContext): boolean {
-  return ctx.config.commands.trustedAssociations.includes(
-    comment.authorAssociation ?? 'NONE',
+export async function isTrusted(
+  ctx: BotContext,
+  comment: CommentContext,
+): Promise<boolean> {
+  if (
+    ctx.config.commands.trustedAssociations.includes(
+      comment.authorAssociation ?? 'NONE',
+    )
+  ) {
+    return true
+  }
+
+  // GitHub can report an organisation member as CONTRIBUTOR in a review
+  // webhook. When collaborators are trusted, verify current repository write
+  // access rather than rejecting a maintainer from that stale association.
+  return Boolean(
+    comment.userLogin &&
+      ctx.config.commands.trustedAssociations.includes('COLLABORATOR') &&
+      (await hasRepositoryWriteAccess(ctx.octokit, ctx.ref, comment.userLogin)),
   )
 }
 
@@ -204,7 +221,10 @@ export async function replyWithCommandHelp(
   ctx: BotContext,
   comment: CommentContext,
 ): Promise<void> {
-  if ((comment.body ?? '').trim() !== '/help' || !isTrusted(ctx, comment)) {
+  if (
+    (comment.body ?? '').trim() !== '/help' ||
+    !(await isTrusted(ctx, comment))
+  ) {
     return
   }
   await commentOnIssue(
@@ -232,7 +252,7 @@ export async function handleIssueCommentCommand(
     return false
   }
 
-  if (!isTrusted(ctx, comment)) {
+  if (!(await isTrusted(ctx, comment))) {
     await commentOnIssue(
       ctx.octokit,
       ctx.ref,
