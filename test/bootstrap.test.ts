@@ -63,7 +63,7 @@ describe('detectCheckNames', () => {
         '    runs-on: x',
       ].join('\n'),
     )
-    expect(await detectCheckNames(root)).toEqual(['Quality / check'])
+    expect(await detectCheckNames(root)).toEqual(['check'])
   })
 
   it('is empty when there are no workflows', async () => {

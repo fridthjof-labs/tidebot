@@ -118,14 +118,14 @@ gate of `lgtm` + `approved` with no required checks.
 ```yaml
 # .github/tidebot.yaml
 tide:
-  requiredContexts: [Quality / check]
+  requiredContexts: [check]
 
 autoApprove:
   rules:
     - name: docs
       paths: ['**/*.md', LICENSE]
       excludePaths: ['infra/**']
-      requiredContexts: [Quality / check]
+      requiredContexts: [check]
 ```
 
 Config is layered: built-in defaults, then `.github/tidebot.yaml` in the

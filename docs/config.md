@@ -110,7 +110,7 @@ tide:
   mergeMethod: squash                # merge | squash | rebase
   requiredLabels: [lgtm, approved]
   blockedLabels: [hold]
-  requiredContexts: [Quality / check]
+  requiredContexts: [check]
   autoRebaseWhenBehind: true
   policies:
     - name: infra
@@ -122,8 +122,9 @@ tide:
         - OpenTofu / plan
 ```
 
-`requiredContexts` names check runs exactly as they appear in the Checks tab
-(usually `Workflow name / job name`). Legacy commit statuses are consulted too.
+`requiredContexts` names check runs exactly as the Checks API reports them
+(normally the job name, such as `check`). Legacy commit statuses are consulted
+too.
 
 The first policy whose `matchLabels` all match replaces the base check set for
 that pull request. `allowSkippedContexts` lets a `skipped` conclusion count as
@@ -144,12 +145,12 @@ autoApprove:
     - name: docs
       paths: ['**/*.md', LICENSE, .gitignore]
       excludePaths: ['infra/**']
-      requiredContexts: [Quality / check]
+      requiredContexts: [check]
       blockedLabels: [area/infra]
     - name: generated-content
       authors: ['${bot}']
       paths: ['src/content/generated/**']
-      requiredContexts: [Quality / check]
+      requiredContexts: [check]
       maxChangedLines: 2000
 ```
 
@@ -178,7 +179,7 @@ plugins:
 dependabot:
   enabled: true
   autoApprove: true
-  requiredContexts: [Quality / check, Dependency audit]
+  requiredContexts: [check, dependency review]
   allowMajorUpdates: false
   requireDependenciesLabel: true
   allowedPathPrefixes: [package.json, pnpm-lock.yaml, .github/]

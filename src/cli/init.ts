@@ -94,11 +94,10 @@ export async function detectCheckNames(root: string): Promise<string[]> {
       continue
     }
     const raw = await readFile(join(workflowDir, entry), 'utf8')
-    const workflowName = raw.match(/^name:\s*(.+)$/m)?.[1]?.trim()
     for (const match of raw.matchAll(/^ {4}name:\s*(.+)$/gm)) {
       const jobName = match[1].trim().replace(/^['"]|['"]$/g, '')
-      if (workflowName && !jobName.includes('${{')) {
-        names.add(`${workflowName} / ${jobName}`)
+      if (!jobName.includes('${{')) {
+        names.add(jobName)
       }
     }
   }
