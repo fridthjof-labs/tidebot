@@ -70,6 +70,7 @@ export async function createContext(
  */
 export async function buildContext(input: {
   octokit: Octokit
+  branchUpdateOctokit?: Octokit
   ref: RepoRef
   identity: BotIdentity
   defaultBranch?: string
@@ -86,6 +87,7 @@ export async function buildContext(input: {
 
   return {
     octokit,
+    branchUpdateOctokit: input.branchUpdateOctokit ?? octokit,
     ref,
     config: loaded.config,
     identity,
@@ -204,7 +206,7 @@ export async function handlePullRequest(
     // A branch update rewrites the head, so skip merging this round and let
     // the resulting check_suite event re-evaluate against the new commit.
     const rebased = await maybeRebaseIfBehind(
-      ctx.octokit,
+      ctx.branchUpdateOctokit,
       ctx.ref,
       pullNumber,
       pull,
@@ -290,7 +292,7 @@ export async function handleDefaultBranchPush(ctx: BotContext): Promise<void> {
   for (const summary of pulls) {
     const pull = await fetchPullRequest(ctx.octokit, ctx.ref, summary.number)
     await maybeRebaseIfBehind(
-      ctx.octokit,
+      ctx.branchUpdateOctokit,
       ctx.ref,
       summary.number,
       pull,

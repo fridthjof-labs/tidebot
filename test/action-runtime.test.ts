@@ -8,6 +8,19 @@ const handleIssueComment = vi.fn()
 const handleIssueIntakeComment = vi.fn()
 const handleDefaultBranchPush = vi.fn()
 
+const getRepositoryInstallationId = vi.fn(async () => 42)
+const installationOctokit = { rest: {} }
+const createBotClients = vi.fn(async () => ({
+  app: {},
+  getRepositoryInstallationId,
+  getInstallationOctokit: vi.fn(async () => installationOctokit),
+}))
+
+vi.mock('../src/core/github.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/core/github.js')>()),
+  createBotClients,
+}))
+
 vi.mock('../src/core/bot.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/core/bot.js')>()),
   buildContext: vi.fn(async (input: Record<string, unknown>) => ({
@@ -58,6 +71,46 @@ describe('action runtime', () => {
       }),
     ).rejects.toThrow(/GITHUB_TOKEN/)
   })
+
+  it('uses App credentials only for branch updates', async () => {
+    await runFromActionEnv({
+      GITHUB_TOKEN: 't',
+      TIDEBOT_APP_ID: '123',
+      TIDEBOT_PRIVATE_KEY: 'key',
+      GITHUB_EVENT_NAME: 'push',
+      GITHUB_EVENT_PATH: await eventFile({
+        repository: REPOSITORY,
+        ref: 'refs/heads/main',
+      }),
+    })
+    expect(createBotClients).toHaveBeenCalledWith(
+      expect.objectContaining({ appId: '123' }),
+    )
+    expect(getRepositoryInstallationId).toHaveBeenCalledWith({
+      owner: 'acme',
+      repo: 'widget',
+    })
+    expect(handleDefaultBranchPush).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branchUpdateOctokit: installationOctokit,
+        identity: expect.objectContaining({ login: 'github-actions[bot]' }),
+      }),
+    )
+  })
+
+  it.each([{ TIDEBOT_APP_ID: '123' }, { TIDEBOT_PRIVATE_KEY: 'key' }])(
+    'rejects incomplete App credentials: %o',
+    async (credentials) => {
+      await expect(
+        runFromActionEnv({
+          GITHUB_TOKEN: 't',
+          ...credentials,
+          GITHUB_EVENT_NAME: 'push',
+          GITHUB_EVENT_PATH: await eventFile({ repository: REPOSITORY }),
+        }),
+      ).rejects.toThrow(/both TIDEBOT_APP_ID and TIDEBOT_PRIVATE_KEY/)
+    },
+  )
 
   it('routes a pull_request event', async () => {
     await runFromActionEnv({

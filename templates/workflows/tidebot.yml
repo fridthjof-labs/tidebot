@@ -58,3 +58,8 @@ jobs:
     uses: fridthjof-labs/tidebot/.github/workflows/run.yml@v0.1.4 # x-release-please-version
     with:
       ref: v0.1.4 # x-release-please-version
+    secrets:
+      # Optional: use an App token only for branch updates so CI re-runs.
+      # All visible actions still come from github-actions[bot].
+      app_id: ${{ secrets.TIDEBOT_APP_ID }}
+      private_key: ${{ secrets.TIDEBOT_PRIVATE_KEY }}

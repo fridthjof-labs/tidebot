@@ -10,8 +10,9 @@ import {
   handleWorkflowRun,
 } from '../core/bot.js'
 import type { BotContext } from '../core/context.js'
+import { createBotClients, credentialsFromEnv } from '../core/github.js'
 import type { BotIdentity } from '../core/identity.js'
-import type { CommentContext } from '../core/types.js'
+import type { CommentContext, RepoRef } from '../core/types.js'
 import { parseRepositoryFullName, toPullRequest } from '../core/webhooks.js'
 
 /**
@@ -25,6 +26,8 @@ export type ActionEnv = {
   GITHUB_EVENT_PATH?: string
   GITHUB_REPOSITORY?: string
   GITHUB_TOKEN?: string
+  TIDEBOT_APP_ID?: string
+  TIDEBOT_PRIVATE_KEY?: string
 }
 
 const ACTIONS_IDENTITY: BotIdentity = {
@@ -34,16 +37,37 @@ const ACTIONS_IDENTITY: BotIdentity = {
   login: 'github-actions[bot]',
 }
 
-async function resolveClient(
+async function resolveClients(
   env: ActionEnv,
-): Promise<{ octokit: Octokit; identity: BotIdentity }> {
-  if (!env.GITHUB_TOKEN) {
-    throw new Error('Set GITHUB_TOKEN for the tidebot action runtime')
+  ref: RepoRef,
+): Promise<{ octokit: Octokit; branchUpdateOctokit: Octokit }> {
+  const hasAppId = Boolean(env.TIDEBOT_APP_ID)
+  const hasPrivateKey = Boolean(env.TIDEBOT_PRIVATE_KEY)
+  if (hasAppId !== hasPrivateKey) {
+    throw new Error(
+      'Set both TIDEBOT_APP_ID and TIDEBOT_PRIVATE_KEY, or neither, for the tidebot action runtime',
+    )
   }
 
+  if (!env.GITHUB_TOKEN) {
+    throw new Error('GITHUB_TOKEN is required for the tidebot action runtime')
+  }
+
+  const octokit = new Octokit({ auth: env.GITHUB_TOKEN })
+  if (!hasAppId) {
+    return { octokit, branchUpdateOctokit: octokit }
+  }
+
+  // Actions remains the operator for every visible action. The optional App
+  // token is scoped to branch updates because those must re-trigger CI, while
+  // pushes made with the workflow's GITHUB_TOKEN are suppressed by GitHub.
+  const clients = await createBotClients(
+    credentialsFromEnv(env as Record<string, string | undefined>),
+  )
+  const installationId = await clients.getRepositoryInstallationId(ref)
   return {
-    octokit: new Octokit({ auth: env.GITHUB_TOKEN }),
-    identity: ACTIONS_IDENTITY,
+    octokit,
+    branchUpdateOctokit: await clients.getInstallationOctokit(installationId),
   }
 }
 
@@ -203,11 +227,12 @@ export async function runFromActionEnv(
     payload.repository?.full_name ?? env.GITHUB_REPOSITORY ?? ''
   const ref = parseRepositoryFullName(fullName)
 
-  const { octokit, identity } = await resolveClient(env)
+  const { octokit, branchUpdateOctokit } = await resolveClients(env, ref)
   const ctx = await buildContext({
     octokit,
+    branchUpdateOctokit,
     ref,
-    identity,
+    identity: ACTIONS_IDENTITY,
     defaultBranch: payload.repository?.default_branch,
   })
 

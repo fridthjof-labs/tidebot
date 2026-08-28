@@ -10,6 +10,8 @@ import type { AutoApproveRule, BotConfig, RepoRef } from './types.js'
  */
 export type BotContext = {
   octokit: Octokit
+  /** Client used only when updating a pull-request branch. */
+  branchUpdateOctokit: Octokit
   ref: RepoRef
   config: BotConfig
   identity: BotIdentity

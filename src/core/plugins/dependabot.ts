@@ -46,7 +46,7 @@ async function tryUpdateDependabotBranch(
   }
 
   const result = await updateBranch(
-    ctx.octokit,
+    ctx.branchUpdateOctokit,
     ctx.ref,
     pullNumber,
     pr,
