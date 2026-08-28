@@ -307,6 +307,10 @@ export async function handleWorkflowRun(
   if (ctx.configProblems.length > 0) {
     return
   }
+  await handleCheckEvent(
+    ctx,
+    (workflowRun.pull_requests ?? []).map((pull) => pull.number),
+  )
   await handlePlanWorkflowRun(ctx, workflowRun)
   await handleDeployWorkflowRun(ctx, workflowRun)
 }

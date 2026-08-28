@@ -298,6 +298,35 @@ describe('handlePullRequest', () => {
     expect(list).not.toHaveBeenCalled()
   })
 
+  it('re-evaluates associated pull requests after a workflow completes', async () => {
+    const pr = pullRequest({ labels: [{ name: 'lgtm' }, { name: 'approved' }] })
+    const state: FakeState = {
+      pr,
+      labels: ['lgtm', 'approved'],
+      checkRuns: GREEN,
+      changedPaths: ['src/a.ts'],
+      comments: [],
+    }
+    const { octokit, merge } = fakeOctokit(state)
+
+    await handleWorkflowRun(
+      context({
+        octokit,
+        config: config({ tide: { requiredContexts: ['Quality / check'] } }),
+      }),
+      {
+        id: 1,
+        name: 'CI',
+        event: 'workflow_dispatch',
+        conclusion: 'success',
+        head_sha: pr.head.sha,
+        pull_requests: [{ number: 42 }],
+      },
+    )
+
+    expect(merge).toHaveBeenCalledTimes(1)
+  })
+
   it('does not merge while a required check is red', async () => {
     const pr = pullRequest({ labels: [{ name: 'lgtm' }, { name: 'approved' }] })
     const state: FakeState = {
