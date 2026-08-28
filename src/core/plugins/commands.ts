@@ -79,7 +79,7 @@ async function executeCommentCommand(
       comment.issueNumber,
     )
     const result = await updateBranch(
-      ctx.octokit,
+      ctx.branchUpdateOctokit,
       ctx.ref,
       comment.issueNumber,
       pull,

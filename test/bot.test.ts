@@ -50,6 +50,7 @@ function fakeOctokit(state: FakeState) {
       return {}
     },
   )
+  const updateBranch = vi.fn().mockResolvedValue({ data: {}, status: 202 })
 
   const octokit = {
     paginate: {
@@ -87,7 +88,7 @@ function fakeOctokit(state: FakeState) {
             user: { login: state.pr.userLogin },
           },
         })),
-        updateBranch: vi.fn().mockResolvedValue({ data: {}, status: 202 }),
+        updateBranch,
         createReview: vi.fn().mockResolvedValue({}),
         listReviews: vi.fn().mockResolvedValue({ data: [] }),
       },
@@ -128,6 +129,7 @@ function fakeOctokit(state: FakeState) {
     createComment,
     updateComment,
     deleteComment,
+    updateBranch,
   }
 }
 
@@ -140,6 +142,43 @@ const GREEN = [
 ]
 
 describe('handlePullRequest', () => {
+  it('uses the dedicated client only for branch updates', async () => {
+    const pr = pullRequest({
+      mergeable_state: 'behind',
+      labels: [{ name: 'lgtm' }, { name: 'approved' }],
+    })
+    const state: FakeState = {
+      pr,
+      labels: ['lgtm', 'approved'],
+      checkRuns: GREEN,
+      changedPaths: [],
+      comments: [],
+    }
+    const { octokit, updateBranch: normalUpdateBranch } = fakeOctokit(state)
+    const branchUpdate = vi.fn().mockResolvedValue({ data: {}, status: 202 })
+    const branchUpdateOctokit = {
+      rest: { pulls: { updateBranch: branchUpdate } },
+    } as never
+
+    await handlePullRequest(
+      context({
+        octokit,
+        branchUpdateOctokit,
+        config: config({
+          tide: {
+            autoRebaseWhenBehind: true,
+            requiredContexts: ['Quality / check'],
+          },
+        }),
+      }),
+      42,
+      pr,
+    )
+
+    expect(branchUpdate).toHaveBeenCalledOnce()
+    expect(normalUpdateBranch).not.toHaveBeenCalled()
+  })
+
   it('merges when the labels and required checks are satisfied', async () => {
     const pr = pullRequest({ labels: [{ name: 'lgtm' }, { name: 'approved' }] })
     const state: FakeState = {

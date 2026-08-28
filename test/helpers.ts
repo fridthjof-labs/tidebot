@@ -36,9 +36,11 @@ export function pullRequest(overrides: Partial<PullRequest> = {}): PullRequest {
 }
 
 export function context(overrides: Partial<BotContext> = {}): BotContext {
+  const octokit = { rest: {} } as unknown as BotContext['octokit']
   return {
     // Tests inject only the endpoints the code under test actually calls.
-    octokit: { rest: {} } as unknown as BotContext['octokit'],
+    octokit,
+    branchUpdateOctokit: octokit,
     ref: { owner: 'acme', repo: 'widget' },
     config: config(),
     identity: IDENTITY,

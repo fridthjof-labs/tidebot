@@ -7,7 +7,7 @@ the GitHub API, so nothing about which repository a build serves is baked in.
 | --- | --- | --- | --- |
 | Entry point | `src/runtime/action.ts` | `src/runtime/worker.ts` | `src/runtime/node.ts` |
 | Trigger | workflow event | `POST /webhooks/github` | `POST /webhooks/github` |
-| App required | no | yes | yes |
+| App required | no; optional for branch updates | yes | yes |
 | Latency | runner cold start | milliseconds | milliseconds |
 | Cost | Actions minutes | free tier | a process |
 
@@ -18,9 +18,9 @@ webhook runtimes use. There is no signature to verify: GitHub authenticated the
 delivery by starting the job.
 
 It authenticates as `github-actions[bot]` using the job's `GITHUB_TOKEN`.
-Pushes made with that token do not trigger workflows, so an auto-rebase updates
-the branch without re-running CI. Use a hosted runtime when that limitation
-matters.
+Because branch updates made with that token do not trigger workflows, optional
+App credentials can supply a separate token for that operation alone. All
+visible actions still come from `github-actions[bot]`.
 
 The generated workflow serialises per pull request with a `concurrency` group,
 so two events cannot both try to merge the same PR.

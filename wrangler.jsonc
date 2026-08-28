@@ -5,7 +5,18 @@
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Pinned so a deploy cannot silently land in the wrong account: this key is
+  // reachable from more than one Cloudflare account, and a Worker holding the
+  // App private key must only ever exist in one of them.
+  "account_id": "9693f3d71030a9384e5fd9e528ab0e0b",
+  // workers.dev stays on for /healthz only; the fetch handler 404s every other
+  // path there. Webhooks arrive on the custom domains below, which are declared
+  // here rather than in the dashboard so a clean checkout reproduces production.
   "workers_dev": true,
+  "routes": [
+    { "pattern": "tidebot.struktly.io", "custom_domain": true },
+    { "pattern": "tidebot.struktly.app", "custom_domain": true }
+  ],
   "exports": {
     "WebhookDelivery": {
       "type": "durable-object",
@@ -39,6 +50,10 @@
     "preview": {
       "name": "tidebot-preview",
       "workers_dev": true,
+      // Empty, not omitted: a named environment inherits top-level `routes`,
+      // so without this a preview deploy reassigns the production webhook
+      // domains to itself.
+      "routes": [],
       "durable_objects": {
         "bindings": [
           {

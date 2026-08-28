@@ -14,7 +14,7 @@ Three paths, in increasing order of setup. They are not exclusive — a hosted
 instance can serve most repositories while an outlier runs itself in Actions —
 but a single repository must use exactly one, or every action happens twice.
 
-## 1. Actions only (no App, no hosting)
+## 1. GitHub Actions (no hosted receiver)
 
 ```bash
 pnpm tidebot init --dir path/to/repo --actions --stale
@@ -39,9 +39,14 @@ repositories default the workflow token to read-only, and a reusable workflow
 cannot be granted more than its caller has — so that block is load-bearing, not
 documentation.
 
-The bot always acts as `github-actions[bot]`. A push made with the job's own
-token does not re-trigger CI, by GitHub's recursion guard. Use the hosted App
-runtime instead when automatic CI after a branch update is required.
+The bot always acts as `github-actions[bot]`. A branch update made with the
+job's own token does not re-trigger CI, by GitHub's recursion guard. If
+auto-rebase must restart CI, add `TIDEBOT_APP_ID` and `TIDEBOT_PRIVATE_KEY` as
+repository secrets. Tidebot uses that App token only for the branch update;
+labels, comments, approvals, and merges still use `github-actions[bot]`.
+
+Do not also run that App's webhook receiver for the same repository. That
+would create a second Tidebot runtime and process every event twice.
 
 ## 2. Register the App
 
