@@ -97,8 +97,10 @@ commands:
     environment: preview
 ```
 
-`trustedAssociations` is GitHub's `author_association` on the comment. Anyone
-else gets told they need to be a collaborator.
+`trustedAssociations` starts with GitHub's `author_association` on the comment.
+When `COLLABORATOR` is trusted, Tidebot also accepts current repository write,
+maintain, or admin access because review webhooks can report an organisation
+member as `CONTRIBUTOR`. Read-only contributors remain untrusted.
 
 `/deploy` and `/plan` do not exist until their workflow file is configured, and
 `/help` lists only what this repository can actually run.

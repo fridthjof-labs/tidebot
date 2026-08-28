@@ -5,7 +5,8 @@ import {
   isCommandAvailable,
   parseCommentCommands,
 } from '../src/core/lib/commands.js'
-import { config } from './helpers.js'
+import { isTrusted } from '../src/core/plugins/commands.js'
+import { config, context } from './helpers.js'
 
 describe('parseCommentCommands', () => {
   it('reads several commands from one body', () => {
@@ -66,6 +67,78 @@ describe('isBotComment', () => {
     expect(isBotComment('some-other-app[bot]')).toBe(true)
     expect(isBotComment('a-human')).toBe(false)
     expect(isBotComment(null)).toBe(false)
+  })
+})
+
+describe('command trust', () => {
+  it('verifies write access when a webhook reports a collaborator as a contributor', async () => {
+    const getCollaboratorPermissionLevel = vi.fn(async () => ({
+      data: { permission: 'admin' },
+    }))
+    const trusted = await isTrusted(
+      context({
+        octokit: {
+          rest: { repos: { getCollaboratorPermissionLevel } },
+        } as never,
+      }),
+      {
+        authorAssociation: 'CONTRIBUTOR',
+        issueNumber: 1,
+        userLogin: 'maintainer',
+      },
+    )
+
+    expect(trusted).toBe(true)
+    expect(getCollaboratorPermissionLevel).toHaveBeenCalledWith({
+      owner: 'acme',
+      repo: 'widget',
+      username: 'maintainer',
+    })
+  })
+
+  it('keeps read-only contributors untrusted', async () => {
+    const trusted = await isTrusted(
+      context({
+        octokit: {
+          rest: {
+            repos: {
+              getCollaboratorPermissionLevel: vi.fn(async () => ({
+                data: { permission: 'read' },
+              })),
+            },
+          },
+        } as never,
+      }),
+      {
+        authorAssociation: 'CONTRIBUTOR',
+        issueNumber: 1,
+        userLogin: 'reader',
+      },
+    )
+
+    expect(trusted).toBe(false)
+  })
+
+  it('does not widen a policy that excludes collaborators', async () => {
+    const getCollaboratorPermissionLevel = vi.fn()
+    const trusted = await isTrusted(
+      context({
+        config: config({
+          commands: { trustedAssociations: ['MEMBER', 'OWNER'] },
+        }),
+        octokit: {
+          rest: { repos: { getCollaboratorPermissionLevel } },
+        } as never,
+      }),
+      {
+        authorAssociation: 'CONTRIBUTOR',
+        issueNumber: 1,
+        userLogin: 'maintainer',
+      },
+    )
+
+    expect(trusted).toBe(false)
+    expect(getCollaboratorPermissionLevel).not.toHaveBeenCalled()
   })
 })
 

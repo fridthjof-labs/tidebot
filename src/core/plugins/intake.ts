@@ -43,7 +43,7 @@ export async function handleIssueIntake(
     return false
   }
 
-  if (!isTrusted(ctx, comment)) {
+  if (!(await isTrusted(ctx, comment))) {
     await commentOnIssue(
       ctx.octokit,
       ctx.ref,
