@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/fridthjof-labs/tidebot/compare/v0.1.2...v0.1.3) (2026-08-28)
+
+
+### Bug Fixes
+
+* recheck PRs after workflows ([#17](https://github.com/fridthjof-labs/tidebot/issues/17)) ([c7b0810](https://github.com/fridthjof-labs/tidebot/commit/c7b0810d8888affba551258761e4bf67c47be665))
+
 ## [0.1.2](https://github.com/fridthjof-labs/tidebot/compare/v0.1.1...v0.1.2) (2026-08-28)
 
 
