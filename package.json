@@ -17,7 +17,7 @@
   },
   "type": "module",
   "bin": {
-    "tidebot": "./dist/cli/index.js"
+    "tidebot": "dist/cli/index.js"
   },
   "engines": {
     "node": ">=22"

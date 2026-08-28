@@ -45,6 +45,7 @@ describe('release configuration', () => {
       'git+https://github.com/fridthjof-labs/tidebot.git',
     )
     expect(pkg.publishConfig).toEqual({ access: 'public', provenance: true })
+    expect(pkg.bin).toEqual({ tidebot: 'dist/cli/index.js' })
     expect(pkg.files).toEqual(
       expect.arrayContaining([
         'dist',
@@ -57,13 +58,10 @@ describe('release configuration', () => {
     )
   })
 
-  it('publishes release tags through npm OIDC with provenance', () => {
+  it('creates GitHub releases without an unconfigured npm publish', () => {
     const workflow = read('.github/workflows/release.yml')
 
-    expect(workflow).toContain('id-token: write')
-    expect(workflow).toContain('npm publish --provenance --access public')
-    expect(workflow).toContain(
-      'ref: ${{ needs.release-please.outputs.tag_name }}',
-    )
+    expect(workflow).toContain('googleapis/release-please-action@')
+    expect(workflow).not.toContain('npm publish')
   })
 })
