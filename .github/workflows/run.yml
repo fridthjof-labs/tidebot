@@ -2,8 +2,7 @@
 # calling workflow. This is the zero-infrastructure runtime — a repository
 # installs one caller workflow and needs no hosted webhook receiver at all.
 # Third-party actions are pinned to commit SHAs, not tags: a tag can be moved
-# to point at different code, and these jobs hold an App private key. Dependabot
-# updates the pins.
+# to point at different code. Dependabot updates the pins.
 name: Tidebot run
 
 on:
@@ -14,14 +13,6 @@ on:
         required: false
         type: string
         default: main
-    secrets:
-      app_id:
-        description: Tidebot App ID; without it the job acts as github-actions[bot]
-        required: false
-      private_key:
-        description: Tidebot App private key
-        required: false
-
 permissions:
   contents: write
   pull-requests: write
@@ -59,6 +50,4 @@ jobs:
         working-directory: .tidebot
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          TIDEBOT_APP_ID: ${{ secrets.app_id }}
-          TIDEBOT_PRIVATE_KEY: ${{ secrets.private_key }}
         run: pnpm exec tsx src/cli/index.ts run

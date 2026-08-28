@@ -77,7 +77,9 @@ describe('action runtime', () => {
       }),
     })
     expect(handlePullRequest).toHaveBeenCalledWith(
-      expect.anything(),
+      expect.objectContaining({
+        identity: expect.objectContaining({ login: 'github-actions[bot]' }),
+      }),
       7,
       expect.objectContaining({
         head: expect.objectContaining({ sha: 'abc' }),

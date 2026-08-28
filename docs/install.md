@@ -39,12 +39,9 @@ repositories default the workflow token to read-only, and a reusable workflow
 cannot be granted more than its caller has — so that block is load-bearing, not
 documentation.
 
-The bot acts as `github-actions[bot]`. Everything works except one thing: a
-push made with the job's own token does not re-trigger CI, by GitHub's own
-recursion guard. Auto-rebase therefore updates the branch but leaves checks
-where they were. Supplying App credentials (`TIDEBOT_APP_ID`,
-`TIDEBOT_PRIVATE_KEY` as repository secrets) fixes that without changing
-anything else.
+The bot always acts as `github-actions[bot]`. A push made with the job's own
+token does not re-trigger CI, by GitHub's recursion guard. Use the hosted App
+runtime instead when automatic CI after a branch update is required.
 
 ## 2. Register the App
 

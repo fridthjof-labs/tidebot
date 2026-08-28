@@ -10,10 +10,8 @@ import {
   handleWorkflowRun,
 } from '../core/bot.js'
 import type { BotContext } from '../core/context.js'
-import { createBotClients, credentialsFromEnv } from '../core/github.js'
 import type { BotIdentity } from '../core/identity.js'
-import { resolveBotIdentity } from '../core/identity.js'
-import type { CommentContext, RepoRef } from '../core/types.js'
+import type { CommentContext } from '../core/types.js'
 import { parseRepositoryFullName, toPullRequest } from '../core/webhooks.js'
 
 /**
@@ -27,8 +25,6 @@ export type ActionEnv = {
   GITHUB_EVENT_PATH?: string
   GITHUB_REPOSITORY?: string
   GITHUB_TOKEN?: string
-  TIDEBOT_APP_ID?: string
-  TIDEBOT_PRIVATE_KEY?: string
 }
 
 const ACTIONS_IDENTITY: BotIdentity = {
@@ -40,25 +36,9 @@ const ACTIONS_IDENTITY: BotIdentity = {
 
 async function resolveClient(
   env: ActionEnv,
-  ref: RepoRef,
 ): Promise<{ octokit: Octokit; identity: BotIdentity }> {
-  // App credentials give the bot its own identity and its own rate limit; the
-  // job's GITHUB_TOKEN is the fallback that needs no App registration at all.
-  if (env.TIDEBOT_APP_ID && env.TIDEBOT_PRIVATE_KEY) {
-    const clients = await createBotClients(
-      credentialsFromEnv(env as Record<string, string | undefined>),
-    )
-    const installationId = await clients.getRepositoryInstallationId(ref)
-    return {
-      octokit: await clients.getInstallationOctokit(installationId),
-      identity: await resolveBotIdentity(clients.app),
-    }
-  }
-
   if (!env.GITHUB_TOKEN) {
-    throw new Error(
-      'Set GITHUB_TOKEN, or TIDEBOT_APP_ID and TIDEBOT_PRIVATE_KEY, for the tidebot action runtime',
-    )
+    throw new Error('Set GITHUB_TOKEN for the tidebot action runtime')
   }
 
   return {
@@ -223,7 +203,7 @@ export async function runFromActionEnv(
     payload.repository?.full_name ?? env.GITHUB_REPOSITORY ?? ''
   const ref = parseRepositoryFullName(fullName)
 
-  const { octokit, identity } = await resolveClient(env, ref)
+  const { octokit, identity } = await resolveClient(env)
   const ctx = await buildContext({
     octokit,
     ref,
