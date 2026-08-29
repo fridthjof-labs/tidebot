@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/fridthjof-labs/tidebot/compare/v0.1.6...v0.1.7) (2026-08-29)
+
+
+### Bug Fixes
+
+* **ci:** cut the release tag after a Tidebot merge ([#25](https://github.com/fridthjof-labs/tidebot/issues/25)) ([6fea7d8](https://github.com/fridthjof-labs/tidebot/commit/6fea7d8dcb1faf91fcc3201b538f31635c0be845))
+
 ## [0.1.6](https://github.com/fridthjof-labs/tidebot/compare/v0.1.5...v0.1.6) (2026-08-28)
 
 
