@@ -151,6 +151,30 @@ re-describes labels that already exist; it never deletes one.
 
 `doctor` checks the live installation against what the config needs.
 
+### Release workflows
+
+Tidebot merges as `github-actions[bot]`. GitHub does not let a `GITHUB_TOKEN`
+push trigger another workflow's `push` event, so a workflow that only listens on
+`push: branches: [main]` will not run after Tidebot merges — a release PR merged
+this way leaves the tag uncut until someone pushes to `main` by hand.
+
+Add a second trigger to any workflow that has to run after a Tidebot merge:
+
+```yaml
+on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [Tidebot]
+    types: [completed]
+    branches: [main]
+```
+
+`branches: [main]` keeps this to the comment-driven runs that can merge;
+`pull_request`-triggered Tidebot runs carry the PR branch and are filtered out.
+The `app_id`/`private_key` secrets do not help here — they are used only for
+branch updates, so the merge itself still comes from `github-actions[bot]`.
+
 ## Organisation defaults
 
 Put shared settings in `.github/tidebot.yaml` in the organisation's `.github`
