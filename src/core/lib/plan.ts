@@ -1,4 +1,5 @@
 import type { BotConfig } from '../types.js'
+import { GLYPH } from './glyphs.js'
 
 const PLAN_BODY_MAX_LENGTH = 60_000
 
@@ -167,6 +168,6 @@ export function formatApplyComment(
   headSha: string,
   branch: string,
 ): string {
-  const icon = conclusion === 'success' ? '✅' : '❌'
+  const icon = conclusion === 'success' ? GLYPH.passed : GLYPH.failed
   return `${icon} ${config.heading} apply **${conclusion}** on \`${branch}\` (\`${headSha.slice(0, 7)}\`).`
 }

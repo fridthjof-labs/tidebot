@@ -11,6 +11,7 @@ import {
   stateIcon,
 } from './check-view.js'
 import { latestCheckRunsByName } from './checks.js'
+import { GLYPH } from './glyphs.js'
 
 /**
  * The merge gate in English. `evaluateTide` decides whether a pull request
@@ -37,7 +38,7 @@ export function verdictFor(
   if (tide.ready) {
     return {
       alert: 'TIP',
-      icon: '✅',
+      icon: GLYPH.passed,
       headline: 'Ready to merge',
       detail: `Tidebot will ${config.tide.mergeMethod} this as soon as it picks the PR up.`,
     }
@@ -96,7 +97,7 @@ export function verdictFor(
       .join(', ')
     return {
       alert: 'CAUTION',
-      icon: '❌',
+      icon: GLYPH.failed,
       headline:
         failingChecks.length === 1
           ? 'Blocked by a failing check'
@@ -108,7 +109,7 @@ export function verdictFor(
   if (requiredChecks.length > 0) {
     return {
       alert: 'NOTE',
-      icon: '⏳',
+      icon: GLYPH.running,
       headline: 'Waiting on CI',
       detail: 'Required checks have not reported a passing result yet.',
     }
@@ -174,7 +175,7 @@ function blockerIcon(
     case 'draft':
       return '📝'
     case 'not-open':
-      return '⚪'
+      return GLYPH.unknown
     case 'conflict':
     case 'mergeable-state':
       return '⚠️'

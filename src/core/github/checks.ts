@@ -1,13 +1,9 @@
 import type { Octokit } from '@octokit/rest'
+import { hasHttpStatus } from '../lib/http.js'
 import type { CheckRun, DeploymentStatus, RepoRef, Status } from '../types.js'
 
 function isAccessError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'status' in error &&
-    (error.status === 403 || error.status === 404)
-  )
+  return hasHttpStatus(error, 403, 404)
 }
 
 /**

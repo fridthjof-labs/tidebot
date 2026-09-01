@@ -1,5 +1,6 @@
 import type { Octokit } from '@octokit/rest'
 import { getFileText } from '../github/contents.js'
+import { hasHttpStatus } from '../lib/http.js'
 import type { BotConfig, PartialBotConfig, RepoRef } from '../types.js'
 import { ConfigError, parsePartialConfig, resolveConfig } from './parse.js'
 
@@ -60,12 +61,7 @@ async function readFile(
     // 404 means there is no config, which is a valid state. 403 means we could
     // not tell — treating that as "no config" would silently drop a repository
     // to permissive defaults, so it is surfaced as a problem instead.
-    if (
-      error &&
-      typeof error === 'object' &&
-      'status' in error &&
-      error.status === 404
-    ) {
+    if (hasHttpStatus(error, 404)) {
       return null
     }
     throw error

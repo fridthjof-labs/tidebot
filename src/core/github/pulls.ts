@@ -1,4 +1,5 @@
 import type { Octokit } from '@octokit/rest'
+import { hasHttpStatus, httpMessage } from '../lib/http.js'
 import type { MergeMethod, PullRequest, RepoRef } from '../types.js'
 
 export async function getRepository(
@@ -286,7 +287,7 @@ export async function updatePullRequestBranch(
       (error.message.includes(
         'merge conflict between base and head (updatePullRequestBranch)',
       ) ||
-        ('status' in error && error.status === 422))
+        hasHttpStatus(error, 422))
         ? 'Cannot update branch — resolve merge conflicts with the base branch first.'
         : error instanceof Error
           ? error.message
@@ -302,15 +303,10 @@ export async function updatePullRequestBranch(
  * existed when GitHub had refused to create one.
  */
 function isAlreadyApprovedError(error: unknown): boolean {
-  if (
-    typeof error !== 'object' ||
-    error === null ||
-    !('status' in error) ||
-    error.status !== 422
-  ) {
+  if (!hasHttpStatus(error, 422)) {
     return false
   }
-  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  const message = httpMessage(error)
   return (
     message.includes('already approved') ||
     message.includes('can only be submitted once') ||

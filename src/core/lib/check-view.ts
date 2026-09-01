@@ -1,5 +1,6 @@
 import type { CheckRun } from '../types.js'
 import { latestCheckRunsByName } from './checks.js'
+import { GLYPH } from './glyphs.js'
 
 /** Conclusions that mean a check reported and lost, rather than was skipped. */
 const ATTENTION_CHECK_CONCLUSIONS = new Set([
@@ -36,13 +37,13 @@ export function checkState(run: CheckRun | undefined): CheckState {
 export function stateIcon(state: CheckState): string {
   switch (state) {
     case 'passed':
-      return '✅'
+      return GLYPH.passed
     case 'failed':
-      return '❌'
+      return GLYPH.failed
     case 'running':
-      return '⏳'
+      return GLYPH.running
     default:
-      return '⏭'
+      return GLYPH.skipped
   }
 }
 

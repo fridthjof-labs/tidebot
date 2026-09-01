@@ -1,4 +1,5 @@
 import type { Octokit } from '@octokit/rest'
+import { hasHttpStatus } from '../lib/http.js'
 import type { RepoRef } from '../types.js'
 
 /** An issue comment or an issue: both carry an author and a body. */
@@ -162,12 +163,8 @@ async function deleteComments(
         comment_id: duplicate.id,
       })
     } catch (error) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'status' in error &&
-        error.status === 404
-      ) {
+      // Already deleted by another runtime or a human.
+      if (hasHttpStatus(error, 404)) {
         continue
       }
       throw error

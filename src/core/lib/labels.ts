@@ -1,6 +1,7 @@
 import type { Octokit } from '@octokit/rest'
 import { addLabelsToIssue, removeLabelFromIssue } from '../github/labels.js'
 import type { RepoRef } from '../types.js'
+import { hasHttpStatus, httpMessage } from './http.js'
 
 /**
  * GitHub answers 404 for a label the issue does not carry, for an issue that
@@ -9,16 +10,10 @@ import type { RepoRef } from '../types.js'
  * the status code alone would hide a wrong issue number or a lost permission.
  */
 function isLabelAlreadyGone(error: unknown): boolean {
-  if (
-    typeof error !== 'object' ||
-    error === null ||
-    !('status' in error) ||
-    error.status !== 404
-  ) {
-    return false
-  }
-  const message = error instanceof Error ? error.message.toLowerCase() : ''
-  return message.includes('label does not exist')
+  return (
+    hasHttpStatus(error, 404) &&
+    httpMessage(error).includes('label does not exist')
+  )
 }
 
 /**

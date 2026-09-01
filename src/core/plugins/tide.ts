@@ -4,6 +4,7 @@ import {
   mergePullRequest,
   upsertIssueCommentWithMarker,
 } from '../github.js'
+import { hasHttpStatus, httpMessage } from '../lib/http.js'
 import { autoMergeFailedMarker } from '../lib/markers.js'
 import { evaluateTide } from '../lib/tide.js'
 import type { CheckRun, PullRequest, Status } from '../types.js'
@@ -18,13 +19,13 @@ function isBenignMergeError(error: unknown): boolean {
     return false
   }
 
-  const message = error.message.toLowerCase()
+  const message = httpMessage(error)
   return (
     message.includes('merge already in progress') ||
     message.includes('pull request is not mergeable') ||
     message.includes('head branch was modified') ||
     message.includes('was closed') ||
-    ('status' in error && error.status === 409)
+    hasHttpStatus(error, 409)
   )
 }
 

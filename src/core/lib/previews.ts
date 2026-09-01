@@ -5,6 +5,7 @@ import type {
   PreviewApp,
 } from '../types.js'
 import { latestCheckRunsByName } from './checks.js'
+import { GLYPH } from './glyphs.js'
 
 /**
  * Deployment state comes from a different API than check runs and has its own
@@ -13,27 +14,27 @@ import { latestCheckRunsByName } from './checks.js'
 function deploymentIcon(state: string): string {
   switch (state) {
     case 'success':
-      return '✅'
+      return GLYPH.passed
     case 'failure':
     case 'error':
-      return '❌'
+      return GLYPH.failed
     case 'pending':
     case 'in_progress':
     case 'queued':
-      return '⏳'
+      return GLYPH.running
     case 'inactive':
-      return '⏭'
+      return GLYPH.skipped
     default:
-      return '⚪'
+      return GLYPH.unknown
   }
 }
 
 function buildCheckLabel(conclusion: string | null): string {
   if (!conclusion) {
-    return '⏳ pending'
+    return `${GLYPH.running} pending`
   }
   if (conclusion === 'neutral' || conclusion === 'skipped') {
-    return `⏭ ${conclusion}`
+    return `${GLYPH.skipped} ${conclusion}`
   }
   return `${deploymentIcon(conclusion)} ${conclusion}`
 }
