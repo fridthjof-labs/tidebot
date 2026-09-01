@@ -1,13 +1,21 @@
 import type { BotConfig, CommandName, ParsedCommand } from '../types.js'
 
 /**
- * A command must be the first thing on its line, as in Prow. Matching
- * anywhere in the body would mean that quoting a comment, pasting the help
- * text, or writing "don't /approve this yet" runs the command — and `/help`
- * itself lists every command, so a body that mentions one is common.
+ * A command must be the first thing on its line, as in Prow. Matching anywhere
+ * in the body would mean that quoting a comment, pasting the help text, or
+ * writing "don't /approve this yet" runs the command — and `/help` itself lists
+ * every command, so a body that mentions one is common.
+ *
+ * A line may carry several commands (`/lgtm /approve`), which is how people
+ * actually write them. Parsing stops at the first token that is not a command
+ * or a `cancel` qualifier, so the leading-token rule still holds for the rest
+ * of the line: everything after prose begins is prose.
  */
-const COMMAND_LINE_PATTERN =
-  /^\/(?:(lgtm|lgm|approve|hold|unhold|retest|rebase|plan|deploy)|remove-(lgtm|lgm|approve|hold))\b(.*)$/i
+const COMMAND_TOKEN_PATTERN =
+  /^\/(?:(lgtm|lgm|approve|hold|unhold|retest|rebase|plan|deploy)|remove-(lgtm|lgm|approve|hold))\b[.,;!]?$/i
+
+/** `cancel` qualifies the command it follows rather than the line. */
+const CANCEL_TOKEN_PATTERN = /^cancel\b[.,;!]?$/i
 
 const CODE_FENCE_PATTERN = /^\s*(```|~~~)/
 
@@ -71,21 +79,37 @@ function commandLines(body: string): string[] {
   return lines
 }
 
-export function parseCommentCommands(body: string): ParsedCommand[] {
-  const commands: ParsedCommand[] = []
+/**
+ * The commands on one line, left to right. `remove-` forms are already a
+ * removal, so a trailing `cancel` must not invert one back.
+ */
+function parseCommandLine(line: string): ParsedCommand[] {
+  const parsed: Array<{ command: ParsedCommand; cancellable: boolean }> = []
 
-  for (const line of commandLines(body)) {
-    const match = line.match(COMMAND_LINE_PATTERN)
-    if (!match) {
+  for (const token of line.split(/\s+/)) {
+    if (token.length === 0) {
       continue
     }
 
-    const cancel = /^\s*cancel\b/i.test(match[3] ?? '')
+    if (CANCEL_TOKEN_PATTERN.test(token)) {
+      const last = parsed.at(-1)
+      if (!last?.cancellable) {
+        break
+      }
+      last.command.cancel = true
+      continue
+    }
+
+    const match = token.match(COMMAND_TOKEN_PATTERN)
+    if (!match) {
+      // Prose begins here; nothing after it is a command.
+      break
+    }
 
     if (match[1]) {
       const name = normalizeCommandName(match[1].toLowerCase())
       if (name) {
-        commands.push({ name, cancel })
+        parsed.push({ command: { name, cancel: false }, cancellable: true })
       }
       continue
     }
@@ -93,11 +117,26 @@ export function parseCommentCommands(body: string): ParsedCommand[] {
     const removed = match[2]?.toLowerCase()
     const name = removed ? normalizeRemovedCommandName(removed) : null
     if (name) {
-      commands.push({ name, cancel: false })
+      parsed.push({ command: { name, cancel: false }, cancellable: false })
     }
   }
 
-  return commands
+  return parsed.map((entry) => entry.command)
+}
+
+/**
+ * Every command in the body, at most one entry per command.
+ *
+ * A body can name the same command twice (`/lgtm /lgtm cancel`). Running both
+ * in order would apply a label and immediately withdraw it, so the last
+ * mention wins.
+ */
+export function parseCommentCommands(body: string): ParsedCommand[] {
+  const byName = new Map<CommandName, ParsedCommand>()
+  for (const command of commandLines(body).flatMap(parseCommandLine)) {
+    byName.set(command.name, command)
+  }
+  return [...byName.values()]
 }
 
 /** True when the repository has configured the workflow a command needs. */
@@ -152,7 +191,7 @@ export function commandHelp(config: BotConfig): string {
   lines.push(
     '',
     `Merging needs ${config.tide.requiredLabels.map((label) => `\`${label}\``).join(' + ')} with no ${config.tide.blockedLabels.map((label) => `\`${label}\``).join('/')} label.`,
-    'Multiple commands in one comment or review are handled together.',
+    'Several commands work in one comment, on one line or on separate lines.',
   )
 
   return lines.join('\n')

@@ -6,6 +6,7 @@ import {
 } from '../src/core/identity.js'
 import { handleIssueIntake } from '../src/core/plugins/intake.js'
 import { applyStaleRules } from '../src/core/plugins/stale.js'
+import { type FakeComment, fakeGitHub } from './fake-github.js'
 import { config, context, IDENTITY, pullRequest } from './helpers.js'
 
 beforeEach(() => {
@@ -71,34 +72,22 @@ describe('stale rules', () => {
   const DAY = 24 * 60 * 60 * 1000
   const now = Date.parse('2026-03-01T00:00:00Z')
 
-  function octokitWithLastCommit(daysAgo: number) {
-    const addLabels = vi.fn()
-    const update = vi.fn()
-    const createComment = vi.fn()
+  function octokitWithLastCommit(
+    daysAgo: number,
+    comments: FakeComment[] = [],
+  ) {
+    const { octokit, spy, failCommentLookups } = fakeGitHub({
+      comments,
+      labels: { 1: ['stale'] },
+      commitDate: new Date(now - daysAgo * DAY).toISOString(),
+    })
     return {
-      addLabels,
-      update,
-      createComment,
-      octokit: {
-        rest: {
-          git: {
-            getCommit: vi.fn(async () => ({
-              data: {
-                committer: {
-                  date: new Date(now - daysAgo * DAY).toISOString(),
-                },
-              },
-            })),
-          },
-          issues: {
-            addLabels,
-            update,
-            createComment,
-            removeLabel: vi.fn(),
-            listComments: vi.fn(async () => ({ data: [] })),
-          },
-        },
-      },
+      octokit,
+      failCommentLookups,
+      addLabels: spy.addLabels,
+      removeLabel: spy.removeLabel,
+      update: spy.updateIssue,
+      createComment: spy.createComment,
     }
   }
 
@@ -107,7 +96,7 @@ describe('stale rules', () => {
   it('does nothing while the branch is recent', async () => {
     const { octokit, addLabels } = octokitWithLastCommit(3)
     await applyStaleRules(
-      context({ octokit: octokit as never, config: staleConfig }),
+      context({ octokit, config: staleConfig }),
       1,
       pullRequest(),
       now,
@@ -118,7 +107,7 @@ describe('stale rules', () => {
   it('labels stale after the configured idle period', async () => {
     const { octokit, addLabels, createComment } = octokitWithLastCommit(15)
     await applyStaleRules(
-      context({ octokit: octokit as never, config: staleConfig }),
+      context({ octokit, config: staleConfig }),
       1,
       pullRequest(),
       now,
@@ -132,7 +121,7 @@ describe('stale rules', () => {
   it('closes only after the extra grace period, once already labelled', async () => {
     const { octokit, update } = octokitWithLastCommit(18)
     await applyStaleRules(
-      context({ octokit: octokit as never, config: staleConfig }),
+      context({ octokit, config: staleConfig }),
       1,
       pullRequest({ labels: [{ name: 'stale' }] }),
       now,
@@ -141,7 +130,7 @@ describe('stale rules', () => {
 
     const closing = octokitWithLastCommit(22)
     await applyStaleRules(
-      context({ octokit: closing.octokit as never, config: staleConfig }),
+      context({ octokit: closing.octokit, config: staleConfig }),
       1,
       pullRequest({ labels: [{ name: 'stale' }] }),
       now,
@@ -153,18 +142,17 @@ describe('stale rules', () => {
 
   it('does not close a pull request a human just commented on', async () => {
     // The bot says "Comment or push to keep it open" — that has to be true.
-    const { octokit, update } = octokitWithLastCommit(40)
-    octokit.rest.issues.listComments = vi.fn(async () => ({
-      data: [
-        {
-          created_at: new Date(now - 1 * DAY).toISOString(),
-          user: { login: 'a-human' },
-        },
-      ],
-    }))
+    const { octokit, update } = octokitWithLastCommit(40, [
+      {
+        id: 1,
+        body: 'still working on it',
+        createdAt: new Date(now - 1 * DAY).toISOString(),
+        user: { login: 'a-human' },
+      },
+    ])
 
     await applyStaleRules(
-      context({ octokit: octokit as never, config: staleConfig }),
+      context({ octokit, config: staleConfig }),
       1,
       pullRequest({ labels: [{ name: 'stale' }] }),
       now,
@@ -174,20 +162,17 @@ describe('stale rules', () => {
   })
 
   it('withdraws the stale label when someone comes back', async () => {
-    const { octokit } = octokitWithLastCommit(40)
-    const removeLabel = vi.fn()
-    octokit.rest.issues.removeLabel = removeLabel
-    octokit.rest.issues.listComments = vi.fn(async () => ({
-      data: [
-        {
-          created_at: new Date(now - 1 * DAY).toISOString(),
-          user: { login: 'a-human' },
-        },
-      ],
-    }))
+    const { octokit, removeLabel } = octokitWithLastCommit(40, [
+      {
+        id: 1,
+        body: 'back on it',
+        createdAt: new Date(now - 1 * DAY).toISOString(),
+        user: { login: 'a-human' },
+      },
+    ])
 
     await applyStaleRules(
-      context({ octokit: octokit as never, config: staleConfig }),
+      context({ octokit, config: staleConfig }),
       1,
       pullRequest({ labels: [{ name: 'stale' }] }),
       now,
@@ -200,18 +185,17 @@ describe('stale rules', () => {
 
   it('ignores its own comments when deciding activity', async () => {
     // Otherwise the pipeline summary would keep every pull request alive.
-    const { octokit, update } = octokitWithLastCommit(40)
-    octokit.rest.issues.listComments = vi.fn(async () => ({
-      data: [
-        {
-          created_at: new Date(now - 1 * DAY).toISOString(),
-          user: { login: IDENTITY.login },
-        },
-      ],
-    }))
+    const { octokit, update } = octokitWithLastCommit(40, [
+      {
+        id: 1,
+        body: 'pipeline status',
+        createdAt: new Date(now - 1 * DAY).toISOString(),
+        user: { login: IDENTITY.login, type: 'Bot' },
+      },
+    ])
 
     await applyStaleRules(
-      context({ octokit: octokit as never, config: staleConfig }),
+      context({ octokit, config: staleConfig }),
       1,
       pullRequest({ labels: [{ name: 'stale' }] }),
       now,
@@ -225,13 +209,12 @@ describe('stale rules', () => {
   it('does not close when it cannot tell whether anyone is active', async () => {
     // A transient API failure must not be read as "nobody commented". Closing
     // is not reversible by the person it surprises.
-    const { octokit, update, addLabels } = octokitWithLastCommit(40)
-    octokit.rest.issues.listComments = vi.fn(async () => {
-      throw Object.assign(new Error('API rate limit exceeded'), { status: 403 })
-    })
+    const { octokit, update, addLabels, failCommentLookups } =
+      octokitWithLastCommit(40)
+    failCommentLookups({ status: 403, message: 'API rate limit exceeded' })
 
     await applyStaleRules(
-      context({ octokit: octokit as never, config: staleConfig }),
+      context({ octokit, config: staleConfig }),
       1,
       pullRequest({ labels: [{ name: 'stale' }] }),
       now,
@@ -242,13 +225,11 @@ describe('stale rules', () => {
   })
 
   it('does not label stale when the comment lookup fails', async () => {
-    const { octokit, addLabels } = octokitWithLastCommit(40)
-    octokit.rest.issues.listComments = vi.fn(async () => {
-      throw new Error('network unreachable')
-    })
+    const { octokit, addLabels, failCommentLookups } = octokitWithLastCommit(40)
+    failCommentLookups({ status: 500, message: 'network unreachable' })
 
     await applyStaleRules(
-      context({ octokit: octokit as never, config: staleConfig }),
+      context({ octokit, config: staleConfig }),
       1,
       pullRequest(),
       now,
@@ -260,7 +241,7 @@ describe('stale rules', () => {
   it('leaves an exempt pull request alone however old', async () => {
     const { octokit, addLabels } = octokitWithLastCommit(500)
     await applyStaleRules(
-      context({ octokit: octokit as never, config: staleConfig }),
+      context({ octokit, config: staleConfig }),
       1,
       pullRequest({ labels: [{ name: 'hold' }] }),
       now,
@@ -279,6 +260,7 @@ describe('issue intake', () => {
       create,
       createComment,
       octokit: {
+        paginate: async () => existingIssues,
         rest: {
           issues: {
             listForRepo: vi.fn(async () => ({ data: existingIssues })),

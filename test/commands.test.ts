@@ -5,7 +5,12 @@ import {
   isCommandAvailable,
   parseCommentCommands,
 } from '../src/core/lib/commands.js'
-import { isTrusted } from '../src/core/plugins/commands.js'
+import { commandReplyMarker } from '../src/core/lib/markers.js'
+import {
+  handleIssueCommentCommand,
+  isTrusted,
+} from '../src/core/plugins/commands.js'
+import { type FakeComment, fakeGitHub } from './fake-github.js'
 import { config, context } from './helpers.js'
 
 describe('parseCommentCommands', () => {
@@ -25,6 +30,56 @@ describe('parseCommentCommands', () => {
     ])
     expect(parseCommentCommands('/remove-hold')).toEqual([
       { name: 'unhold', cancel: false },
+    ])
+  })
+
+  it('keeps only the last mention of a repeated command', () => {
+    // Applying then immediately withdrawing the label is nobody's intent.
+    expect(parseCommentCommands('/lgtm /lgtm cancel')).toEqual([
+      { name: 'lgtm', cancel: true },
+    ])
+    expect(parseCommentCommands('/approve\n/approve')).toEqual([
+      { name: 'approve', cancel: false },
+    ])
+  })
+
+  it('reads several commands from one line', () => {
+    expect(parseCommentCommands('/lgtm /approve')).toEqual([
+      { name: 'lgtm', cancel: false },
+      { name: 'approve', cancel: false },
+    ])
+    expect(parseCommentCommands('/approve /lgtm /hold')).toEqual([
+      { name: 'approve', cancel: false },
+      { name: 'lgtm', cancel: false },
+      { name: 'hold', cancel: false },
+    ])
+  })
+
+  it('attaches cancel to the command it follows on a shared line', () => {
+    expect(parseCommentCommands('/lgtm cancel /approve')).toEqual([
+      { name: 'lgtm', cancel: true },
+      { name: 'approve', cancel: false },
+    ])
+  })
+
+  it('stops at the first word that is not a command', () => {
+    // The leading-token rule has to survive multi-command lines, or
+    // "/hold we should also /approve later" would approve.
+    expect(parseCommentCommands('/hold we should also /approve later')).toEqual(
+      [{ name: 'hold', cancel: false }],
+    )
+  })
+
+  it('tolerates punctuation between commands', () => {
+    expect(parseCommentCommands('/lgtm, /approve!')).toEqual([
+      { name: 'lgtm', cancel: false },
+      { name: 'approve', cancel: false },
+    ])
+  })
+
+  it('does not let cancel revive a remove- form', () => {
+    expect(parseCommentCommands('/remove-lgtm cancel')).toEqual([
+      { name: 'remove-lgtm', cancel: false },
     ])
   })
 
@@ -209,5 +264,74 @@ describe('command availability', () => {
         config({ commands: { updateBranchMethod: 'signed-rebase' } }),
       ),
     ).toMatch('re-sign the commits')
+  })
+})
+
+/**
+ * Two Tidebot runtimes in one repository — the App and the in-repo Actions
+ * workflow — each answered every slash command, so a `/plan` on an
+ * unconfigured repository produced two identical refusals. The reply is keyed
+ * to the comment that asked for it, so the second runtime edits the first
+ * answer instead of adding its own.
+ */
+describe('command replies', () => {
+  function harness(comments: FakeComment[]) {
+    const { octokit, spy, db } = fakeGitHub({ comments })
+    return {
+      octokit,
+      db,
+      createComment: spy.createComment,
+      updateComment: spy.updateComment,
+    }
+  }
+
+  const trigger = {
+    body: '/plan',
+    commentId: 555,
+    issueNumber: 42,
+    authorAssociation: 'MEMBER',
+    userLogin: 'froppa',
+  }
+
+  it('marks its reply with the triggering comment', async () => {
+    const { octokit, createComment } = harness([])
+
+    await handleIssueCommentCommand(context({ octokit }), trigger)
+
+    const body = String(
+      (createComment.mock.calls[0]?.[0] as { body?: string })?.body ?? '',
+    )
+    expect(body).toMatch(commandReplyMarker(555))
+    expect(body).toMatch('`/plan` is not configured')
+  })
+
+  it('edits the answer another runtime already posted', async () => {
+    const { octokit, createComment, updateComment } = harness([
+      {
+        id: 900,
+        body: `${commandReplyMarker(555)}\n@froppa \`/plan\` is not configured for this repository.`,
+        user: { login: 'github-actions[bot]', type: 'Bot' },
+      },
+    ])
+
+    await handleIssueCommentCommand(context({ octokit }), trigger)
+
+    expect(createComment).not.toHaveBeenCalled()
+    expect(updateComment).toHaveBeenCalledOnce()
+  })
+
+  it('still refuses to edit a human comment carrying the marker', async () => {
+    const { octokit, createComment, updateComment } = harness([
+      {
+        id: 901,
+        body: `nice try ${commandReplyMarker(555)}`,
+        user: { login: 'a-human' },
+      },
+    ])
+
+    await handleIssueCommentCommand(context({ octokit }), trigger)
+
+    expect(updateComment).not.toHaveBeenCalled()
+    expect(createComment).toHaveBeenCalledOnce()
   })
 })

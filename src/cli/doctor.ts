@@ -1,6 +1,7 @@
 import type { Octokit } from '@octokit/rest'
 import { managedLabels } from '../core/config/defaults.js'
 import { loadRepositoryConfig } from '../core/config/load.js'
+import { listDirectoryFileNames, listRepositoryLabels } from '../core/github.js'
 import type { BotConfig, RepoRef } from '../core/types.js'
 import { APP_EVENTS, APP_PERMISSIONS } from './manifest.js'
 
@@ -86,16 +87,9 @@ export async function diagnose(
     }
   }
 
-  const existingLabels = new Set<string>()
-  const iterator = octokit.paginate.iterator(
-    octokit.rest.issues.listLabelsForRepo,
-    { owner: ref.owner, repo: ref.repo, per_page: 100 },
+  const existingLabels = new Set(
+    (await listRepositoryLabels(octokit, ref)).map((label) => label.name),
   )
-  for await (const { data } of iterator) {
-    for (const label of data) {
-      existingLabels.add(label.name)
-    }
-  }
 
   const missingLabels = managedLabels(config)
     .map((label) => label.name)
@@ -113,6 +107,20 @@ export async function diagnose(
       findings.push({
         level: 'error',
         message: `updateBranchMethod is signed-rebase but ${config.signedRebase.workflowFile} is not in .github/workflows`,
+      })
+    }
+  }
+
+  // The App and the in-repo Actions workflow are alternatives, not layers.
+  // Running both handles every delivery twice under two identities, doubling
+  // the API cost against a shared rate limit.
+  if (options.installation) {
+    const workflows = await listWorkflowFiles(octokit, ref)
+    if (workflows.includes('tidebot.yml')) {
+      findings.push({
+        level: 'warn',
+        message:
+          'The App is installed and .github/workflows/tidebot.yml is present; both runtimes will handle every event. Keep one — delete the workflow, or remove this repository from the App installation.',
       })
     }
   }
@@ -138,14 +146,5 @@ async function listWorkflowFiles(
   octokit: Octokit,
   { owner, repo }: RepoRef,
 ): Promise<string[]> {
-  try {
-    const { data } = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path: '.github/workflows',
-    })
-    return Array.isArray(data) ? data.map((entry) => entry.name) : []
-  } catch {
-    return []
-  }
+  return listDirectoryFileNames(octokit, { owner, repo }, '.github/workflows')
 }

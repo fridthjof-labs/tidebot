@@ -1,5 +1,10 @@
 import type { Octokit } from '@octokit/rest'
 import { managedLabels } from '../core/config/defaults.js'
+import {
+  createRepositoryLabel,
+  listRepositoryLabels,
+  updateRepositoryLabel,
+} from '../core/github.js'
 import type { BotConfig, RepoRef } from '../core/types.js'
 
 export type LabelSyncResult = {
@@ -21,19 +26,12 @@ export async function syncRepositoryLabels(
 ): Promise<LabelSyncResult> {
   const result: LabelSyncResult = { created: [], updated: [], unchanged: [] }
 
-  const existing = new Map<string, { color: string; description: string }>()
-  const iterator = octokit.paginate.iterator(
-    octokit.rest.issues.listLabelsForRepo,
-    { owner, repo, per_page: 100 },
+  const existing = new Map<string, { color: string; description: string }>(
+    (await listRepositoryLabels(octokit, { owner, repo })).map((label) => [
+      label.name,
+      { color: label.color, description: label.description },
+    ]),
   )
-  for await (const { data } of iterator) {
-    for (const label of data) {
-      existing.set(label.name, {
-        color: label.color,
-        description: label.description ?? '',
-      })
-    }
-  }
 
   const seen = new Set<string>()
   for (const label of managedLabels(config)) {
@@ -45,13 +43,7 @@ export async function syncRepositoryLabels(
     const current = existing.get(label.name)
     if (!current) {
       if (!options.dryRun) {
-        await octokit.rest.issues.createLabel({
-          owner,
-          repo,
-          name: label.name,
-          color: label.color,
-          description: label.description,
-        })
+        await createRepositoryLabel(octokit, { owner, repo }, label)
       }
       result.created.push(label.name)
       continue
@@ -66,13 +58,7 @@ export async function syncRepositoryLabels(
     }
 
     if (!options.dryRun) {
-      await octokit.rest.issues.updateLabel({
-        owner,
-        repo,
-        name: label.name,
-        color: label.color,
-        description: label.description,
-      })
+      await updateRepositoryLabel(octokit, { owner, repo }, label)
     }
     result.updated.push(label.name)
   }

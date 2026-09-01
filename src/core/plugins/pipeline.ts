@@ -1,15 +1,22 @@
 import type { BotContext } from '../context.js'
 import {
   fetchPullRequest,
+  findManagedIssueComment,
   findOpenPullRequestForSha,
   getChecksForRef,
   getDeploymentStatusesForRef,
+  updatePullRequestBody,
   upsertIssueCommentWithMarker,
 } from '../github.js'
 import { PIPELINE_COMMENT_MARKER } from '../lib/markers.js'
-import { extractPlanSection, formatPipelineSummary } from '../lib/summary.js'
+import {
+  extractPlanSection,
+  formatPipelineSummary,
+  formatStatusBlock,
+  upsertStatusBlock,
+} from '../lib/summary.js'
 import { evaluateTide } from '../lib/tide.js'
-import type { PullRequest } from '../types.js'
+import type { CheckRun, PullRequest, TideDecision } from '../types.js'
 
 export type WorkflowRunPayload = {
   id: number
@@ -37,7 +44,9 @@ export async function upsertPipelineSummaryComment(
       : Promise.resolve({ deployments: [], available: true }),
   ])
 
-  await upsertIssueCommentWithMarker(
+  const tide = evaluateTide(pr, ctx.config.tide, checkRuns, statuses)
+
+  const commentUrl = await upsertIssueCommentWithMarker(
     ctx.octokit,
     ctx.ref,
     pullNumber,
@@ -45,7 +54,7 @@ export async function upsertPipelineSummaryComment(
     formatPipelineSummary({
       checkRuns,
       deployments: deploymentResult.deployments,
-      tide: evaluateTide(pr, ctx.config.tide, checkRuns, statuses),
+      tide,
       pr,
       config: ctx.config,
       deploymentsAvailable: deploymentResult.available,
@@ -56,6 +65,39 @@ export async function upsertPipelineSummaryComment(
     }),
     ctx.identity.login,
   )
+
+  await syncStatusBlock(ctx, pullNumber, pr, checkRuns, tide, commentUrl)
+}
+
+/**
+ * Mirror the verdict into the pull request body. The comment holds the detail
+ * but sits wherever the timeline put it, which on a busy pull request is far
+ * above the fold.
+ */
+async function syncStatusBlock(
+  ctx: BotContext,
+  pullNumber: number,
+  pr: PullRequest,
+  checkRuns: CheckRun[],
+  tide: TideDecision,
+  commentUrl: string | null,
+): Promise<void> {
+  if (!ctx.config.pipeline.statusInBody) {
+    return
+  }
+
+  const body = upsertStatusBlock(
+    pr.body,
+    formatStatusBlock({
+      checkRuns,
+      tide,
+      pr,
+      config: ctx.config,
+      commentUrl,
+    }),
+  )
+
+  await updatePullRequestBody(ctx.octokit, ctx.ref, pullNumber, body, pr.body)
 }
 
 /** Keep a plan section that an earlier workflow_run wrote into the comment. */
@@ -63,25 +105,15 @@ async function readExistingPlanSection(
   ctx: BotContext,
   pullNumber: number,
 ): Promise<string | null> {
-  const listComments = ctx.octokit.rest?.issues?.listComments
-  if (!listComments) {
-    return null
-  }
-
-  const { data: comments } = await listComments({
-    owner: ctx.ref.owner,
-    repo: ctx.ref.repo,
-    issue_number: pullNumber,
-    per_page: 100,
-    sort: 'created',
-    direction: 'desc',
-  })
-  const existing = comments.find(
-    (comment) =>
-      comment.user?.login === ctx.identity.login &&
-      comment.body?.includes(PIPELINE_COMMENT_MARKER),
+  return extractPlanSection(
+    await findManagedIssueComment(
+      ctx.octokit,
+      ctx.ref,
+      pullNumber,
+      PIPELINE_COMMENT_MARKER,
+      ctx.identity.login,
+    ),
   )
-  return extractPlanSection(existing?.body ?? null)
 }
 
 export async function maybeRefreshPipelineSummary(

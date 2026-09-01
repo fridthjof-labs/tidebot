@@ -41,6 +41,8 @@ export async function getChecksForRef(
       name: run.name,
       conclusion: run.conclusion,
       started_at: run.started_at,
+      completed_at: run.completed_at,
+      url: run.html_url,
     })),
     statuses: statuses.map((status) => ({
       context: status.context,

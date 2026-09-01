@@ -4,6 +4,7 @@ import { invalidateConfigCache } from '../src/core/config/load.js'
 import type { BotClients } from '../src/core/github.js'
 import { resetBotIdentityCache } from '../src/core/identity.js'
 import { registerWebhookHandlers } from '../src/core/webhooks.js'
+import { fakeGitHub } from './fake-github.js'
 import { IDENTITY } from './helpers.js'
 
 /**
@@ -11,50 +12,16 @@ import { IDENTITY } from './helpers.js'
  * exercise the routing and gating a delivery actually goes through.
  */
 function harness(options: { allowedOwners?: string[] } = {}) {
-  const octokit = {
-    paginate: { iterator: () => [{ data: [] }] },
-    rest: {
-      repos: {
-        getContent: vi.fn(async () => {
-          throw Object.assign(new Error('Not Found'), { status: 404 })
-        }),
-        listCommitStatusesForRef: vi.fn(async () => ({ data: [] })),
-        listDeployments: vi.fn(),
-        listDeploymentStatuses: vi.fn(async () => ({ data: [] })),
+  const { octokit, requests } = fakeGitHub({
+    pulls: [
+      {
+        number: 7,
+        head: { sha: 'abc', ref: 'f', repo: { full_name: 'acme/widget' } },
       },
-      pulls: {
-        list: vi.fn(async () => ({ data: [] })),
-        listFiles: vi.fn(),
-        get: vi.fn(async () => ({
-          data: {
-            node_id: 'PR_1',
-            state: 'open',
-            labels: [],
-            additions: 1,
-            deletions: 0,
-            head: { sha: 'abc', ref: 'f', repo: { full_name: 'acme/widget' } },
-            base: { ref: 'main' },
-            user: { login: 'someone' },
-          },
-        })),
-      },
-      issues: {
-        addLabels: vi.fn(),
-        removeLabel: vi.fn(),
-        listLabelsOnIssue: vi.fn(async () => ({ data: [] })),
-        listComments: vi.fn(async () => ({ data: [] })),
-        createComment: vi.fn(),
-      },
-      checks: { listForRef: vi.fn(async () => ({ data: { check_runs: [] } })) },
-      git: {
-        getCommit: vi.fn(async () => ({
-          data: { committer: { date: new Date().toISOString() } },
-        })),
-      },
-    },
-  }
+    ],
+  })
 
-  const getInstallationOctokit = vi.fn(async () => octokit as never)
+  const getInstallationOctokit = vi.fn(async () => octokit)
   const webhooks = new Webhooks({ secret: 'test' })
   const clients = {
     app: {
@@ -71,7 +38,7 @@ function harness(options: { allowedOwners?: string[] } = {}) {
   } as unknown as BotClients
 
   registerWebhookHandlers(clients, options)
-  return { webhooks, getInstallationOctokit, octokit }
+  return { webhooks, getInstallationOctokit, octokit, requests }
 }
 
 const REPOSITORY = {
@@ -179,7 +146,7 @@ describe('event routing', () => {
   })
 
   it('ignores a push to a branch that is not the default', async () => {
-    const { webhooks, octokit } = harness()
+    const { webhooks, requests } = harness()
 
     await webhooks.receive({
       id: '5',
@@ -192,7 +159,7 @@ describe('event routing', () => {
       } as never,
     })
 
-    expect(octokit.rest.pulls.list).not.toHaveBeenCalled()
+    expect(requests.some(({ path }) => path.endsWith('/pulls'))).toBe(false)
   })
 
   it('ignores a check_suite with no pull requests attached', async () => {

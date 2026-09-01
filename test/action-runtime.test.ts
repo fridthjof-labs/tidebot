@@ -118,6 +118,9 @@ describe('action runtime', () => {
       GITHUB_EVENT_NAME: 'pull_request',
       GITHUB_EVENT_PATH: await eventFile({
         repository: REPOSITORY,
+        action: 'synchronize',
+        before: 'old',
+        after: 'abc',
         pull_request: {
           number: 7,
           node_id: 'PR_1',
@@ -137,6 +140,7 @@ describe('action runtime', () => {
       expect.objectContaining({
         head: expect.objectContaining({ sha: 'abc' }),
       }),
+      expect.objectContaining({ action: 'synchronize', before: 'old' }),
     )
   })
 

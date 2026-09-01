@@ -1,6 +1,10 @@
 import type { BotContext } from '../context.js'
 import { ruleAuthors } from '../context.js'
-import { getChecksForRef, getPullRequestChangedPaths } from '../github.js'
+import {
+  addLabelsToIssue,
+  getChecksForRef,
+  getPullRequestChangedPaths,
+} from '../github.js'
 import {
   evaluateAutoApprove,
   missingApprovalLabels,
@@ -57,12 +61,7 @@ export async function maybeAutoApprove(
     return
   }
 
-  await ctx.octokit.rest.issues.addLabels({
-    owner: ctx.ref.owner,
-    repo: ctx.ref.repo,
-    issue_number: pullNumber,
-    labels: toAdd,
-  })
+  await addLabelsToIssue(ctx.octokit, ctx.ref, pullNumber, toAdd)
 
   for (const label of toAdd) {
     pr.labels.push({ name: label })

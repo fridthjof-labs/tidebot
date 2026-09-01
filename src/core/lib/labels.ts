@@ -1,5 +1,48 @@
 import type { Octokit } from '@octokit/rest'
+import { addLabelsToIssue, removeLabelFromIssue } from '../github/labels.js'
 import type { RepoRef } from '../types.js'
+
+/**
+ * GitHub answers 404 for a label the issue does not carry, for an issue that
+ * does not exist, and for a repository it cannot see. Only the first is
+ * survivable, and only the first names the label in its message. Matching on
+ * the status code alone would hide a wrong issue number or a lost permission.
+ */
+function isLabelAlreadyGone(error: unknown): boolean {
+  if (
+    typeof error !== 'object' ||
+    error === null ||
+    !('status' in error) ||
+    error.status !== 404
+  ) {
+    return false
+  }
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  return message.includes('label does not exist')
+}
+
+/**
+ * Remove a label, treating "already gone" as success.
+ *
+ * Label decisions are made from a snapshot that a human, a concurrent run, or
+ * a second Tidebot runtime can invalidate before the write lands. The removal
+ * is one step of a converging sync, so failing it would abandon the rest.
+ */
+export async function removeLabelIfPresent(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  issueNumber: number,
+  name: string,
+): Promise<void> {
+  try {
+    await removeLabelFromIssue(octokit, { owner, repo }, issueNumber, name)
+  } catch (error) {
+    if (isLabelAlreadyGone(error)) {
+      return
+    }
+    throw error
+  }
+}
 
 /**
  * Converge the labels Tidebot owns for a pull request. Only labels under
@@ -22,21 +65,11 @@ export async function syncLabels(
   const toRemove = managed.filter((label) => !desired.has(label))
 
   if (toAdd.length > 0) {
-    await octokit.rest.issues.addLabels({
-      owner,
-      repo,
-      issue_number: issueNumber,
-      labels: toAdd,
-    })
+    await addLabelsToIssue(octokit, { owner, repo }, issueNumber, toAdd)
   }
 
   for (const label of toRemove) {
-    await octokit.rest.issues.removeLabel({
-      owner,
-      repo,
-      issue_number: issueNumber,
-      name: label,
-    })
+    await removeLabelIfPresent(octokit, { owner, repo }, issueNumber, label)
   }
 }
 
@@ -50,21 +83,11 @@ export async function setWorkflowLabel(
 ): Promise<void> {
   const hasLabel = currentLabels.includes(label)
   if (enabled && !hasLabel) {
-    await octokit.rest.issues.addLabels({
-      owner,
-      repo,
-      issue_number: issueNumber,
-      labels: [label],
-    })
+    await addLabelsToIssue(octokit, { owner, repo }, issueNumber, [label])
     return
   }
 
   if (!enabled && hasLabel) {
-    await octokit.rest.issues.removeLabel({
-      owner,
-      repo,
-      issue_number: issueNumber,
-      name: label,
-    })
+    await removeLabelIfPresent(octokit, { owner, repo }, issueNumber, label)
   }
 }

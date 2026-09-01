@@ -7,7 +7,10 @@ import {
   getPullRequestLabels,
   hasRepositoryWriteAccess,
   submitPullRequestApproval,
+  upsertIssueCommentWithMarker,
 } from '../github.js'
+import type { CommandOutcome } from '../lib/command-reply.js'
+import { formatCommandReply } from '../lib/command-reply.js'
 import {
   commandHelp,
   isBotComment,
@@ -15,9 +18,8 @@ import {
   parseCommentCommands,
 } from '../lib/commands.js'
 import { setWorkflowLabel } from '../lib/labels.js'
+import { commandReplyMarker } from '../lib/markers.js'
 import { isForkPullRequest, updateBranch } from '../lib/rebase.js'
-import type { CommandOutcome } from '../lib/summary.js'
-import { formatCommandReply } from '../lib/summary.js'
 import type { CommentContext, ParsedCommand } from '../types.js'
 
 function labelForCommand(
@@ -212,6 +214,34 @@ export async function isTrusted(
 }
 
 /**
+ * Answer the comment that triggered this run, at most once.
+ *
+ * Keyed to that comment so the reply is an upsert. A repository running both
+ * the App and the in-repo Actions workflow handles the delivery twice, and the
+ * second runtime has to edit the existing answer rather than add one.
+ */
+async function replyToComment(
+  ctx: BotContext,
+  comment: CommentContext,
+  body: string,
+): Promise<void> {
+  if (comment.commentId === undefined) {
+    await commentOnIssue(ctx.octokit, ctx.ref, comment.issueNumber, body)
+    return
+  }
+
+  const marker = commandReplyMarker(comment.commentId)
+  await upsertIssueCommentWithMarker(
+    ctx.octokit,
+    ctx.ref,
+    comment.issueNumber,
+    marker,
+    `${marker}\n${body}`,
+    ctx.identity.login,
+  )
+}
+
+/**
  * `/help` answers only trusted users. On a public repository anyone can
  * comment, and an open help command is a free way to make the bot post on
  * demand — which costs the installation's shared REST quota and is visible
@@ -227,12 +257,7 @@ export async function replyWithCommandHelp(
   ) {
     return
   }
-  await commentOnIssue(
-    ctx.octokit,
-    ctx.ref,
-    comment.issueNumber,
-    commandHelp(ctx.config),
-  )
+  await replyToComment(ctx, comment, commandHelp(ctx.config))
 }
 
 /**
@@ -253,10 +278,9 @@ export async function handleIssueCommentCommand(
   }
 
   if (!(await isTrusted(ctx, comment))) {
-    await commentOnIssue(
-      ctx.octokit,
-      ctx.ref,
-      comment.issueNumber,
+    await replyToComment(
+      ctx,
+      comment,
       `@${comment.userLogin ?? 'unknown'} must be a repository collaborator to run commands.`,
     )
     return false
@@ -272,7 +296,7 @@ export async function handleIssueCommentCommand(
 
   const reply = formatCommandReply(comment.userLogin ?? 'unknown', outcomes)
   if (reply.trim().length > 0) {
-    await commentOnIssue(ctx.octokit, ctx.ref, comment.issueNumber, reply)
+    await replyToComment(ctx, comment, reply)
   }
 
   // The caller re-runs the full pull request pass when this returns true, and

@@ -1,6 +1,7 @@
 import type { BotContext } from '../context.js'
 import {
   downloadWorkflowJobLogs,
+  listRecentlyClosedPullRequests,
   upsertIssueCommentWithMarker,
 } from '../github.js'
 import { applyMarker } from '../lib/markers.js'
@@ -49,17 +50,10 @@ async function postApplyComment(
   ctx: BotContext,
   workflowRun: WorkflowRunPayload,
 ): Promise<void> {
-  const { data: pulls } = await ctx.octokit.rest.pulls.list({
-    owner: ctx.ref.owner,
-    repo: ctx.ref.repo,
-    state: 'closed',
-    sort: 'updated',
-    direction: 'desc',
-    per_page: 30,
-  })
+  const pulls = await listRecentlyClosedPullRequests(ctx.octokit, ctx.ref)
 
   const merged = pulls.find(
-    (pull) => pull.merged_at && pull.merge_commit_sha === workflowRun.head_sha,
+    (pull) => pull.mergedAt && pull.mergeCommitSha === workflowRun.head_sha,
   )
   if (!merged) {
     return

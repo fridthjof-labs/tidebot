@@ -34,6 +34,9 @@ export type CheckRun = {
   name: string
   conclusion: string | null
   started_at?: string | null
+  completed_at?: string | null
+  /** Run page on GitHub, so a failing check in the summary is one click away. */
+  url?: string | null
 }
 
 export type Status = {
@@ -80,8 +83,26 @@ export type ResolvedTidePolicy = {
   policyName?: string
 }
 
+/**
+ * Why Tide is holding a pull request, kept structured rather than pre-rendered.
+ * The merge gate and the summary need the same facts at different levels of
+ * detail, and reconstructing them by parsing sentences would put presentation
+ * in charge of a merge decision.
+ */
+export type TideBlocker =
+  | { kind: 'draft' }
+  | { kind: 'not-open'; state: string }
+  | { kind: 'conflict' }
+  | { kind: 'mergeable-state'; state: string }
+  | { kind: 'auto-merge-disabled' }
+  | { kind: 'blocked-label'; label: string }
+  | { kind: 'missing-label'; label: string }
+  | { kind: 'missing-check'; context: string }
+
 export type TideDecision = {
   ready: boolean
+  blockers: TideBlocker[]
+  /** `blockers` rendered as the one-line reasons commands and logs report. */
   reasons: string[]
   policyName?: string
 }
@@ -150,6 +171,11 @@ export type BotConfig = {
     blockedLabels: string[]
     requiredContexts: string[]
     autoRebaseWhenBehind: boolean
+    /**
+     * Labels withdrawn when a push changes what the pull request proposes.
+     * Empty disables it, and lets a review label outlive the code it approved.
+     */
+    dismissLabelsOnPush: string[]
     policies: TidePolicy[]
   }
   signedRebase: {
@@ -178,6 +204,12 @@ export type BotConfig = {
     /** `workflow_run.name` that publishes previews; refreshes the summary. */
     deployWorkflowName?: string
     previewApps: PreviewApp[]
+    /**
+     * Mirror the verdict into a managed block in the pull request body. Off for
+     * an installation that would rather Tidebot never touch a human's
+     * description.
+     */
+    statusInBody: boolean
   }
   stale: {
     daysUntilStale: number
