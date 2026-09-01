@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/fridthjof-labs/tidebot/compare/v0.2.0...v0.2.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* report a finished pull request, and the apply jobs left out ([#30](https://github.com/fridthjof-labs/tidebot/issues/30)) ([f7b0fcc](https://github.com/fridthjof-labs/tidebot/commit/f7b0fcc4939ae327ea80317e569a7ed2970b6518))
+
 ## [0.2.0](https://github.com/fridthjof-labs/tidebot/compare/v0.1.7...v0.2.0) (2026-09-01)
 
 
