@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { createAppFromManifest } from '../src/cli/app.js'
 import { diagnose } from '../src/cli/doctor.js'
 import {
   detectAreaRules,
@@ -13,6 +14,7 @@ import {
   APP_EVENTS,
   APP_PERMISSIONS,
   appManifest,
+  loadManifest,
 } from '../src/cli/manifest.js'
 import { managedLabels } from '../src/core/config/defaults.js'
 import { parseConfig } from '../src/core/config/parse.js'
@@ -342,5 +344,69 @@ describe('diagnose runtime conflicts', () => {
     expect(
       findings.some((finding) => finding.message.includes('both runtimes')),
     ).toBe(false)
+  })
+})
+
+describe('loadManifest', () => {
+  const secretsOnly = JSON.stringify({
+    name: 'fridthjof-labs-tofu',
+    url: 'https://github.com/fridthjof-labs/infrastructure',
+    default_permissions: { secrets: 'write', metadata: 'read' },
+  })
+
+  it('keeps the permissions the file declares and nothing more', () => {
+    const manifest = loadManifest(secretsOnly)
+    expect(manifest.default_permissions).toEqual({
+      secrets: 'write',
+      metadata: 'read',
+    })
+    expect(manifest.default_events).toEqual([])
+    expect(manifest.public).toBe(false)
+  })
+
+  it('leaves the webhook inactive unless the file says otherwise', () => {
+    // An App that only holds a credential has no reason to receive deliveries.
+    expect(loadManifest(secretsOnly).hook_attributes).toEqual({ active: false })
+  })
+
+  it('refuses a manifest with no permissions or no name', () => {
+    expect(() => loadManifest(JSON.stringify({ name: 'x' }))).toThrow(
+      'default_permissions',
+    )
+    expect(() =>
+      loadManifest(
+        JSON.stringify({ default_permissions: { secrets: 'write' } }),
+      ),
+    ).toThrow('name')
+  })
+
+  it("refuses a redirect_url, which is the CLI's to set", () => {
+    expect(() =>
+      loadManifest(
+        JSON.stringify({
+          name: 'x',
+          default_permissions: { secrets: 'write' },
+          redirect_url: 'https://elsewhere',
+        }),
+      ),
+    ).toThrow('redirect_url')
+  })
+})
+
+describe('createAppFromManifest', () => {
+  it('needs a webhook URL only when registering Tidebot itself', async () => {
+    // A manifest file carries its own hook_attributes, so the flag is not
+    // required with one; without one the CLI is registering Tidebot, which
+    // cannot work without a webhook.
+    await expect(
+      createAppFromManifest({
+        name: 'tidebot',
+        homepageUrl: 'https://example',
+        public: false,
+        port: 0,
+        outFile: '/dev/null',
+        open: () => {},
+      }),
+    ).rejects.toThrow('--webhook-url is required unless --manifest is given')
   })
 })

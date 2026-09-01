@@ -28,20 +28,26 @@ function randomState(): string {
 export async function createAppFromManifest(options: {
   org?: string
   name: string
-  webhookUrl: string
+  webhookUrl?: string
   homepageUrl: string
   public: boolean
   port: number
   outFile: string
   open: (url: string) => void
+  /** A manifest to register verbatim instead of Tidebot's own. */
+  manifest?: Record<string, unknown>
 }): Promise<CreatedApp> {
   const state = randomState()
   const actionUrl = options.org
     ? `https://github.com/organizations/${options.org}/settings/apps/new`
     : 'https://github.com/settings/apps/new'
 
+  if (!options.manifest && !options.webhookUrl) {
+    throw new Error('--webhook-url is required unless --manifest is given')
+  }
   const manifest = {
-    ...appManifest(options),
+    ...(options.manifest ??
+      appManifest({ ...options, webhookUrl: options.webhookUrl ?? '' })),
     redirect_url: `http://127.0.0.1:${options.port}/callback`,
   }
 

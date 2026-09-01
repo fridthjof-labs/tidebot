@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process'
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Octokit } from '@octokit/rest'
 import { buildContext } from '../core/bot.js'
@@ -30,6 +30,7 @@ import { diagnose } from './doctor.js'
 import { initRepository } from './init.js'
 import { generateSigningKey } from './keygen.js'
 import { syncRepositoryLabels } from './labels.js'
+import { loadManifest } from './manifest.js'
 
 const USAGE = `tidebot — Prow-inspired GitHub automation, no Kubernetes required
 
@@ -40,6 +41,9 @@ Runtimes
 
 Bootstrap
   app create --org O --webhook-url URL [--name N] [--public] [--port P]
+  app create --org O --manifest FILE [--out FILE] [--port P]
+      Register any App from a manifest file, such as an infrastructure
+      root's Secrets-only App. Its permissions stay in the reviewed file.
                               Register the GitHub App from a manifest
   app show                    Show the App this environment is configured as
   init [--dir .] [--actions] [--stale] [--signed-rebase] [--force]
@@ -251,11 +255,23 @@ async function commandApp(args: Args): Promise<void> {
     throw new Error(`Unknown "app" subcommand "${subcommand}"`)
   }
 
-  const outFile = resolve(flag(args, 'out') ?? 'tidebot-app.json')
+  const manifestPath = flag(args, 'manifest')
+  const manifest = manifestPath
+    ? loadManifest(await readFile(resolve(manifestPath), 'utf8'))
+    : undefined
+  const outFile = resolve(
+    flag(args, 'out') ??
+      (typeof manifest?.name === 'string'
+        ? `${manifest.name}-app.json`
+        : 'tidebot-app.json'),
+  )
   const created = await createAppFromManifest({
     org: flag(args, 'org'),
     name: flag(args, 'name') ?? 'tidebot',
-    webhookUrl: requireFlag(args, 'webhook-url'),
+    webhookUrl: manifest
+      ? flag(args, 'webhook-url')
+      : requireFlag(args, 'webhook-url'),
+    manifest,
     homepageUrl:
       flag(args, 'homepage') ?? 'https://github.com/fridthjof-labs/tidebot',
     public: boolFlag(args, 'public'),
