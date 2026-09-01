@@ -623,7 +623,7 @@ describe('handlePullRequest', () => {
 
     expect(updatePull).toHaveBeenCalledOnce()
     expect(state.pr.body).toMatch('Fixes #1.')
-    expect(state.pr.body).toMatch('**Tidebot — 👀 Waiting for review**')
+    expect(state.pr.body).toMatch('**Tidebot — 🏷️ Waiting for review**')
 
     // A second pass renders the same block, so it must not write again —
     // every write raises `pull_request.edited` and would loop.

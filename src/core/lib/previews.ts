@@ -4,12 +4,15 @@ import type {
   DeploymentStatus,
   PreviewApp,
 } from '../types.js'
+import { checkState, conclusionWord, stateIcon } from './check-view.js'
 import { latestCheckRunsByName } from './checks.js'
 import { GLYPH } from './glyphs.js'
 
 /**
- * Deployment state comes from a different API than check runs and has its own
- * values, so it is rendered here rather than through the check-state model.
+ * Deployment state is its own vocabulary from its own API, so it maps onto the
+ * shared glyphs here. Check runs do not come through this function: a build
+ * check is a check run and is rendered by `check-view`, or the same conclusion
+ * would show one symbol in the preview table and another in the check table.
  */
 function deploymentIcon(state: string): string {
   switch (state) {
@@ -29,19 +32,9 @@ function deploymentIcon(state: string): string {
   }
 }
 
-function buildCheckLabel(conclusion: string | null): string {
-  if (!conclusion) {
-    return `${GLYPH.running} pending`
-  }
-  if (conclusion === 'neutral' || conclusion === 'skipped') {
-    return `${GLYPH.skipped} ${conclusion}`
-  }
-  return `${deploymentIcon(conclusion)} ${conclusion}`
-}
-
 function formatTimestamp(timestamp: string | null): string {
   if (!timestamp) {
-    return '—'
+    return GLYPH.none
   }
   return timestamp.replace(/\.\d{3}Z$/, 'Z').replace('T', ' ')
 }
@@ -71,7 +64,7 @@ function previewDeployRow(
     ]
       .filter(Boolean)
       .join('; ')
-    return `| ${appLink(app, deployment.url)} | ${deploymentIcon(deployment.state)} ${deployment.state} | ${detail || '—'} |`
+    return `| ${appLink(app, deployment.url)} | ${deploymentIcon(deployment.state)} ${deployment.state} | ${detail || GLYPH.none} |`
   }
 
   const buildCheck = app.buildCheck
@@ -94,7 +87,8 @@ function previewDeployRow(
     return `| ${appLink(app, null)} | ⏳ pending | ${hint} |`
   }
 
-  return `| ${appLink(app, null)} | ${buildCheckLabel(buildCheck.conclusion)} | Build ${buildCheck.conclusion} |`
+  const word = conclusionWord(buildCheck.conclusion)
+  return `| ${appLink(app, null)} | ${stateIcon(checkState(buildCheck))} ${word} | Build ${word} |`
 }
 
 /** The preview section, or nothing when no preview apps are configured. */

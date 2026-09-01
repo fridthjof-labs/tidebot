@@ -12,6 +12,7 @@ import {
 } from '../core/github.js'
 import type { BotIdentity } from '../core/identity.js'
 import { resolveBotIdentity } from '../core/identity.js'
+import { GLYPH } from '../core/lib/glyphs.js'
 import { sweepStalePullRequests } from '../core/plugins/stale.js'
 import type { RepoRef } from '../core/types.js'
 import { runFromActionEnv } from '../runtime/action.js'
@@ -179,8 +180,8 @@ async function commandLabels(args: Args): Promise<void> {
   })
 
   const prefix = boolFlag(args, 'dry-run') ? 'would ' : ''
-  console.log(`${prefix}create   ${result.created.join(', ') || '—'}`)
-  console.log(`${prefix}update   ${result.updated.join(', ') || '—'}`)
+  console.log(`${prefix}create   ${result.created.join(', ') || GLYPH.none}`)
+  console.log(`${prefix}update   ${result.updated.join(', ') || GLYPH.none}`)
   console.log(`unchanged  ${result.unchanged.length}`)
 }
 
@@ -223,7 +224,11 @@ async function commandDoctor(args: Args): Promise<void> {
     `Repository ${ref.owner}/${ref.repo}${installationId ? ` (installation ${installationId})` : ''}\n`,
   )
 
-  const icon = { ok: '✅', warn: '⚠️ ', error: '❌' }
+  const icon = {
+    ok: GLYPH.passed,
+    warn: `${GLYPH.warning} `,
+    error: GLYPH.failed,
+  }
   for (const finding of findings) {
     console.log(`${icon[finding.level]} ${finding.message}`)
   }

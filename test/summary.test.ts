@@ -409,3 +409,41 @@ describe('extractPlanSection', () => {
     expect(extractPlanSection('no plan here')).toBeNull()
   })
 })
+
+describe('preview build checks', () => {
+  /**
+   * A build check is a check run. Rendering it through the deployment-state
+   * vocabulary showed ⚪ for conclusions that vocabulary does not have, while
+   * the check table showed ❌ for the same run.
+   */
+  it.each(['timed_out', 'action_required', 'cancelled'])(
+    'agrees with the check table on a %s build check',
+    (conclusion) => {
+      const runs: CheckRun[] = [
+        {
+          name: 'Build / site',
+          conclusion,
+          started_at: '2026-01-01T00:00:00Z',
+        },
+      ]
+      const body = formatPipelineSummary({
+        checkRuns: runs,
+        deployments: [],
+        tide: decision(),
+        pr: pullRequest(),
+        config: config({
+          plugins: { pipeline: true },
+          pipeline: {
+            previewApps: [{ name: 'Site', buildCheck: 'Build / site' }],
+          },
+        }),
+      })
+
+      const previewRow = body
+        .split('\n')
+        .find((line) => line.startsWith('| Site |'))
+      expect(previewRow).toMatch('❌')
+      expect(previewRow).not.toMatch('⚪')
+    },
+  )
+})

@@ -74,11 +74,11 @@ export function conclusionWord(conclusion: string | null): string {
 /** How long a finished check took, or an em dash while it is running. */
 export function checkDuration(run: CheckRun): string {
   if (!run.started_at || !run.completed_at) {
-    return '—'
+    return GLYPH.none
   }
   const ms = Date.parse(run.completed_at) - Date.parse(run.started_at)
   if (!Number.isFinite(ms) || ms < 0) {
-    return '—'
+    return GLYPH.none
   }
 
   const seconds = Math.round(ms / 1000)

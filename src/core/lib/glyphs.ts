@@ -1,9 +1,10 @@
 /**
- * The glyph vocabulary every rendered surface shares.
+ * Every glyph any surface renders, defined once.
  *
- * Check conclusions and deployment states are different vocabularies from
- * different APIs, so each maps onto these separately, but a reader should not
- * have to learn two sets of symbols for the same five outcomes.
+ * Check conclusions, deployment states and merge blockers are separate
+ * vocabularies from separate sources and map onto these independently, but a
+ * reader should not have to learn a different symbol for the same outcome
+ * depending on which table it appears in.
  */
 export const GLYPH = {
   passed: '✅',
@@ -11,4 +12,12 @@ export const GLYPH = {
   running: '⏳',
   skipped: '⏭',
   unknown: '⚪',
+  paused: '⏸',
+  warning: '⚠️',
+  draft: '📝',
+  hold: '✋',
+  label: '🏷️',
+  refused: '🙅',
+  /** Stands in for a value a table has no data for. */
+  none: '—',
 } as const

@@ -59,7 +59,7 @@ export function verdictFor(
   if (has('draft')) {
     return {
       alert: 'NOTE',
-      icon: '📝',
+      icon: BLOCKER_GLYPH.draft,
       headline: 'Draft',
       detail: 'Mark the pull request ready for review to arm the merge gate.',
     }
@@ -69,7 +69,7 @@ export function verdictFor(
   if (holdLabel?.kind === 'blocked-label') {
     return {
       alert: 'WARNING',
-      icon: '✋',
+      icon: BLOCKER_GLYPH['blocked-label'],
       headline: 'On hold',
       detail: `Remove the \`${holdLabel.label}\` label to release the merge gate.`,
     }
@@ -83,7 +83,7 @@ export function verdictFor(
   if (conflicted) {
     return {
       alert: 'CAUTION',
-      icon: '⚠️',
+      icon: BLOCKER_GLYPH.conflict,
       headline: 'Merge conflict',
       detail: 'Resolve the conflicts with the base branch, then push.',
     }
@@ -123,7 +123,7 @@ export function verdictFor(
   if (missingLabels.length > 0) {
     return {
       alert: 'NOTE',
-      icon: '👀',
+      icon: BLOCKER_GLYPH['missing-label'],
       headline: 'Waiting for review',
       detail: `Needs ${missingLabels.join(' and ')} before the merge gate opens.`,
     }
@@ -132,7 +132,7 @@ export function verdictFor(
   if (has('auto-merge-disabled')) {
     return {
       alert: 'NOTE',
-      icon: '🙅',
+      icon: BLOCKER_GLYPH['auto-merge-disabled'],
       headline: 'Auto-merge off for this PR',
       detail: 'The matching Tide policy disables auto-merge; merge by hand.',
     }
@@ -140,7 +140,7 @@ export function verdictFor(
 
   return {
     alert: 'NOTE',
-    icon: '⏸',
+    icon: GLYPH.paused,
     headline: 'Not merging yet',
     detail: 'See the blockers below.',
   }
@@ -166,28 +166,29 @@ function mergeableStateText(state: string): string | null {
   }
 }
 
-/** A glyph per blocker, so the list is scannable. */
+/**
+ * One glyph per kind of blocker, so the headline and the list below it cannot
+ * label the same condition with different symbols.
+ */
+const BLOCKER_GLYPH: Record<TideBlocker['kind'], string> = {
+  draft: GLYPH.draft,
+  'not-open': GLYPH.unknown,
+  conflict: GLYPH.warning,
+  'mergeable-state': GLYPH.warning,
+  'auto-merge-disabled': GLYPH.refused,
+  'blocked-label': GLYPH.hold,
+  'missing-label': GLYPH.label,
+  // Replaced per blocker: which glyph depends on what the check reported.
+  'missing-check': GLYPH.failed,
+}
+
 function blockerIcon(
   blocker: TideBlocker,
   byName: Map<string, CheckRun>,
 ): string {
-  switch (blocker.kind) {
-    case 'draft':
-      return '📝'
-    case 'not-open':
-      return GLYPH.unknown
-    case 'conflict':
-    case 'mergeable-state':
-      return '⚠️'
-    case 'auto-merge-disabled':
-      return '🙅'
-    case 'blocked-label':
-      return '✋'
-    case 'missing-label':
-      return '🏷️'
-    case 'missing-check':
-      return stateIcon(checkState(byName.get(blocker.context)))
-  }
+  return blocker.kind === 'missing-check'
+    ? stateIcon(checkState(byName.get(blocker.context)))
+    : BLOCKER_GLYPH[blocker.kind]
 }
 
 function blockerText(
