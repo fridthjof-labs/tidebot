@@ -70,6 +70,8 @@ export function toPullRequest(payload: {
   node_id: string
   draft?: boolean | null
   state: string
+  merged?: boolean | null
+  merged_at?: string | null
   title?: string | null
   body?: string | null
   mergeable?: boolean | null
@@ -90,6 +92,7 @@ export function toPullRequest(payload: {
     id: payload.node_id,
     draft: payload.draft ?? false,
     state: payload.state,
+    merged: payload.merged ?? Boolean(payload.merged_at),
     title: payload.title ?? null,
     body: payload.body ?? null,
     mergeable: payload.mergeable ?? null,

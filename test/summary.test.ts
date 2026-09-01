@@ -409,3 +409,97 @@ describe('extractPlanSection', () => {
     expect(extractPlanSection('no plan here')).toBeNull()
   })
 })
+
+describe('preview build checks', () => {
+  /**
+   * A build check is a check run. Rendering it through the deployment-state
+   * vocabulary showed ⚪ for conclusions that vocabulary does not have, while
+   * the check table showed ❌ for the same run.
+   */
+  it.each(['timed_out', 'action_required', 'cancelled'])(
+    'agrees with the check table on a %s build check',
+    (conclusion) => {
+      const runs: CheckRun[] = [
+        {
+          name: 'Build / site',
+          conclusion,
+          started_at: '2026-01-01T00:00:00Z',
+        },
+      ]
+      const body = formatPipelineSummary({
+        checkRuns: runs,
+        deployments: [],
+        tide: decision(),
+        pr: pullRequest(),
+        config: config({
+          plugins: { pipeline: true },
+          pipeline: {
+            previewApps: [{ name: 'Site', buildCheck: 'Build / site' }],
+          },
+        }),
+      })
+
+      const previewRow = body
+        .split('\n')
+        .find((line) => line.startsWith('| Site |'))
+      expect(previewRow).toMatch('❌')
+      expect(previewRow).not.toMatch('⚪')
+    },
+  )
+})
+
+describe('a pull request that is over', () => {
+  /**
+   * The comment is re-rendered by events that arrive after a merge, and under
+   * Actions latency the pull request can close between the event and the
+   * fetch. A merged pull request reported as blocked reads as a failure, and
+   * its blockers are artefacts: GitHub stops computing mergeability once a
+   * pull request closes.
+   */
+  const closedTide = decision({
+    ready: false,
+    blockers: [
+      { kind: 'not-open', state: 'closed' },
+      { kind: 'mergeable-state', state: 'unknown' },
+    ],
+  })
+
+  it('reports a merged pull request as merged', () => {
+    const body = formatPipelineSummary({
+      checkRuns: GREEN,
+      deployments: [],
+      tide: closedTide,
+      pr: pullRequest({ state: 'closed', merged: true }),
+      config: config(),
+    })
+
+    expect(body).toMatch('✅ Merged')
+    expect(body).not.toMatch('Not merging yet')
+    expect(body).not.toMatch('Blocking the merge')
+    expect(body).not.toMatch('mergeability')
+  })
+
+  it('distinguishes closed without merging', () => {
+    const body = formatPipelineSummary({
+      checkRuns: GREEN,
+      deployments: [],
+      tide: closedTide,
+      pr: pullRequest({ state: 'closed', merged: false }),
+      config: config(),
+    })
+
+    expect(body).toMatch('Closed without merging')
+    expect(body).not.toMatch('Blocking the merge')
+  })
+
+  it('says the same thing in the pull request body', () => {
+    const block = formatStatusBlock({
+      checkRuns: GREEN,
+      tide: closedTide,
+      pr: pullRequest({ state: 'closed', merged: true }),
+      config: config(),
+    })
+
+    expect(block).toMatch('**Tidebot — ✅ Merged**')
+  })
+})

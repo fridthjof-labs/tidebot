@@ -20,6 +20,7 @@ export function pullRequest(overrides: Partial<PullRequest> = {}): PullRequest {
     id: 'PR_1',
     draft: false,
     state: 'open',
+    merged: false,
     title: 'A change',
     body: '',
     mergeable: true,

@@ -438,6 +438,7 @@ export async function fetchPullRequest(
     id: data.node_id,
     draft: data.draft ?? false,
     state: data.state,
+    merged: data.merged ?? Boolean(data.merged_at),
     title: data.title,
     body: data.body,
     mergeable: data.mergeable,

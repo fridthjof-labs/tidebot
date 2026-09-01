@@ -2,6 +2,8 @@ export type PullRequest = {
   id: string
   draft: boolean
   state: string
+  /** Distinguishes a merged pull request from one closed without merging. */
+  merged: boolean
   title?: string | null
   body?: string | null
   mergeable: boolean | null

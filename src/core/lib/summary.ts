@@ -52,8 +52,9 @@ export function formatPipelineSummary(input: {
   } = input
 
   const latest = [...latestCheckRunsByName(checkRuns).values()]
-  const verdict = verdictFor(tide, checkRuns, config)
-  const blockers = tide.ready ? [] : blockerLines(tide, checkRuns)
+  const verdict = verdictFor(tide, checkRuns, config, pr)
+  const finished = pr.state !== 'open'
+  const blockers = tide.ready || finished ? [] : blockerLines(tide, checkRuns)
   const alsoFailing = alsoFailingLines(checkRuns, blockedCheckContexts(tide))
 
   return [
@@ -114,7 +115,7 @@ export function formatStatusBlock(input: {
   commentUrl?: string | null
 }): string {
   const { checkRuns, tide, pr, config, commentUrl = null } = input
-  const verdict = verdictFor(tide, checkRuns, config)
+  const verdict = verdictFor(tide, checkRuns, config, pr)
   const latest = [...latestCheckRunsByName(checkRuns).values()]
 
   const detail = [
