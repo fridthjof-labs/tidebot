@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/fridthjof-labs/tidebot/compare/v0.1.7...v0.2.0) (2026-09-01)
+
+
+### Features
+
+* rebuild the pull request status surfaces ([#27](https://github.com/fridthjof-labs/tidebot/issues/27)) ([e9bb733](https://github.com/fridthjof-labs/tidebot/commit/e9bb73394800e67a0080551f61e1722a8b234729))
+
 ## [0.1.7](https://github.com/fridthjof-labs/tidebot/compare/v0.1.6...v0.1.7) (2026-08-29)
 
 
