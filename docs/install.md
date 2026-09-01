@@ -115,7 +115,11 @@ release-please publishes a tag and deploys exactly that tag. It needs one
 repository secret, `CLOUDFLARE_API_TOKEN`, holding a token with Workers Scripts
 edit rights on the account in `wrangler.jsonc`. Without it the job fails, on
 purpose: a release that quietly did not deploy is harder to notice than a red
-job.
+job. To deploy a tag that already exists, run the workflow by hand with that tag:
+
+```bash
+gh workflow run release.yml -f tag=v0.2.1
+```
 
 For the isolated preview environment, create `tidebot-webhooks-preview` and
 `tidebot-webhooks-preview-dlq`, set its secrets with `--env preview`, and deploy

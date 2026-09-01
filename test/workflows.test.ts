@@ -76,8 +76,15 @@ describe('release deploys the Worker', () => {
 
   it('deploys the tag that was released, not whatever main is at', () => {
     expect(release).toMatch(
-      /ref:\s*\$\{\{\s*needs\.release-please\.outputs\.tag_name\s*\}\}/,
+      /ref:\s*\$\{\{\s*inputs\.tag \|\| needs\.release-please\.outputs\.tag_name\s*\}\}/,
     )
     expect(release).toMatch(/wrangler deploy --env=""/)
+  })
+
+  it('can deploy a named tag on dispatch, for a release that shipped nothing', () => {
+    // release-please does not cut a release for a `ci:` or `chore:` commit,
+    // so the job that introduced deploys could not deploy the release before it.
+    expect(release).toMatch(/workflow_dispatch:\s*\n\s+inputs:\s*\n\s+tag:/)
+    expect(release).toMatch(/inputs\.tag != ''/)
   })
 })
