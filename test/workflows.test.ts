@@ -61,3 +61,23 @@ describe('workflow supply chain', () => {
     }
   })
 })
+
+describe('release deploys the Worker', () => {
+  const release = readFileSync(new URL('release.yml', WORKFLOW_DIR), 'utf8')
+
+  it('has a deploy job that runs only when a release was created', () => {
+    // Without this, a merged release PR cuts a tag and nothing ships; the
+    // Worker stays on whatever was last deployed by hand.
+    expect(release).toMatch(/^\s+deploy:\s*$/m)
+    expect(release).toMatch(
+      /needs\.release-please\.outputs\.release_created == 'true'/,
+    )
+  })
+
+  it('deploys the tag that was released, not whatever main is at', () => {
+    expect(release).toMatch(
+      /ref:\s*\$\{\{\s*needs\.release-please\.outputs\.tag_name\s*\}\}/,
+    )
+    expect(release).toMatch(/wrangler deploy --env=""/)
+  })
+})
