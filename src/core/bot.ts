@@ -7,6 +7,7 @@ import {
   getChecksForRef,
   getPullRequestChangedPaths,
   getRepository,
+  listOpenPullRequests,
   upsertIssueCommentWithMarker,
 } from './github.js'
 import { type BotIdentity, resolveBotIdentity } from './identity.js'
@@ -21,6 +22,7 @@ import {
   replyWithCommandHelp,
 } from './plugins/commands.js'
 import { maybeAutoApproveDependabot } from './plugins/dependabot.js'
+import { dismissStaleMergeLabels, type PushEvent } from './plugins/dismiss.js'
 import { handleIssueIntake } from './plugins/intake.js'
 import {
   handleDeployWorkflowRun,
@@ -140,6 +142,22 @@ function hasMergeIntent(pr: PullRequest, requiredLabels: string[]): boolean {
   )
 }
 
+/** The originating pull request event, when there was one. */
+export type PullRequestEvent = PushEvent & { action?: string }
+
+/** A copy without those labels. The caller's pull request is not modified. */
+function withoutLabels(pr: PullRequest, removed: string[]): PullRequest {
+  if (removed.length === 0) {
+    return pr
+  }
+  return {
+    ...pr,
+    labels: pr.labels.filter(
+      (label) => !label.name || !removed.includes(label.name),
+    ),
+  }
+}
+
 /**
  * The one path every pull-request-shaped event funnels through. Expensive
  * lookups (changed paths, check runs) are fetched at most once and only when a
@@ -149,13 +167,26 @@ export async function handlePullRequest(
   ctx: BotContext,
   pullNumber: number,
   pr?: PullRequest,
+  event?: PullRequestEvent,
 ): Promise<void> {
   if (await reportConfigProblems(ctx, pullNumber)) {
     return
   }
 
   const { config } = ctx
-  const pull = pr ?? (await fetchPullRequest(ctx.octokit, ctx.ref, pullNumber))
+  const fetched =
+    pr ?? (await fetchPullRequest(ctx.octokit, ctx.ref, pullNumber))
+
+  // Runs before anything reads the labels: a push that changed the proposed
+  // code must not be evaluated against the review of the previous revision,
+  // and the rest of this pass has to see the labels as they now are.
+  const pull =
+    event?.action === 'synchronize'
+      ? withoutLabels(
+          fetched,
+          await dismissStaleMergeLabels(ctx, pullNumber, fetched, event),
+        )
+      : fetched
 
   await applySizeLabel(ctx, pullNumber, pull)
   await applyAreaLabels(ctx, pullNumber)
@@ -279,14 +310,9 @@ export async function handleDefaultBranchPush(ctx: BotContext): Promise<void> {
     return
   }
 
-  const { data: pulls } = await ctx.octokit.rest.pulls.list({
-    owner: ctx.ref.owner,
-    repo: ctx.ref.repo,
-    state: 'open',
+  const pulls = await listOpenPullRequests(ctx.octokit, ctx.ref, {
     base: ctx.defaultBranch,
-    per_page: MAX_PULLS_PER_PUSH,
-    sort: 'updated',
-    direction: 'desc',
+    limit: MAX_PULLS_PER_PUSH,
   })
 
   for (const summary of pulls) {

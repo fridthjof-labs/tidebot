@@ -1,4 +1,6 @@
 import type { Octokit } from '@octokit/rest'
+import { getFileText } from '../github/contents.js'
+import { hasHttpStatus } from '../lib/http.js'
 import type { BotConfig, PartialBotConfig, RepoRef } from '../types.js'
 import { ConfigError, parsePartialConfig, resolveConfig } from './parse.js'
 
@@ -54,28 +56,12 @@ async function readFile(
   path: string,
 ): Promise<string | null> {
   try {
-    const { data } = await octokit.rest.repos.getContent({ owner, repo, path })
-    if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) {
-      return null
-    }
-    // Buffer is unavailable in the Workers runtime; atob is in both.
-    return typeof Buffer !== 'undefined'
-      ? Buffer.from(data.content, 'base64').toString('utf8')
-      : new TextDecoder().decode(
-          Uint8Array.from(atob(data.content.replace(/\n/g, '')), (character) =>
-            character.charCodeAt(0),
-          ),
-        )
+    return await getFileText(octokit, { owner, repo }, path)
   } catch (error) {
     // 404 means there is no config, which is a valid state. 403 means we could
     // not tell — treating that as "no config" would silently drop a repository
     // to permissive defaults, so it is surfaced as a problem instead.
-    if (
-      error &&
-      typeof error === 'object' &&
-      'status' in error &&
-      error.status === 404
-    ) {
+    if (hasHttpStatus(error, 404)) {
       return null
     }
     throw error

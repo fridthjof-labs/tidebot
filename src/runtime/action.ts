@@ -95,6 +95,9 @@ type IssueCommentPayload = EventPayload & {
 
 type PullRequestPayload = EventPayload & {
   pull_request: Parameters<typeof toPullRequest>[0] & { number: number }
+  /** Present on `synchronize`: the head before and after the push. */
+  before?: string
+  after?: string
 }
 
 type ReviewPayload = EventPayload & {
@@ -140,11 +143,16 @@ async function dispatch(
   switch (eventName) {
     case 'pull_request':
     case 'pull_request_target': {
-      const { pull_request } = payload as PullRequestPayload
+      const event = payload as PullRequestPayload
       await handlePullRequest(
         ctx,
-        pull_request.number,
-        toPullRequest(pull_request),
+        event.pull_request.number,
+        toPullRequest(event.pull_request),
+        {
+          action: event.action,
+          before: event.before ?? null,
+          after: event.after ?? null,
+        },
       )
       return
     }

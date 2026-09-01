@@ -143,6 +143,11 @@ export function registerWebhookHandlers(
       ctx,
       payload.pull_request.number,
       toPullRequest(payload.pull_request),
+      {
+        action: payload.action,
+        before: 'before' in payload ? payload.before : null,
+        after: 'after' in payload ? payload.after : null,
+      },
     )
   })
 

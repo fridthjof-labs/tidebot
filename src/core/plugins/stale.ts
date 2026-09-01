@@ -1,7 +1,16 @@
 import type { Octokit } from '@octokit/rest'
 import type { BotContext } from '../context.js'
-import { commentOnIssue, fetchPullRequest } from '../github.js'
+import { listIssueComments } from '../github/comments.js'
+import {
+  addLabelsToIssue,
+  closeIssueAsNotPlanned,
+  commentOnIssue,
+  fetchPullRequest,
+  getCommitDate,
+  snapshotOpenPullRequests,
+} from '../github.js'
 import { isBotComment } from '../lib/commands.js'
+import { removeLabelIfPresent } from '../lib/labels.js'
 import type { PullRequest, RepoRef } from '../types.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -39,12 +48,7 @@ async function getLastPushDate(
   headSha: string,
 ): Promise<string | null> {
   try {
-    const { data } = await octokit.rest.git.getCommit({
-      owner,
-      repo,
-      commit_sha: headSha,
-    })
-    return data.committer?.date ?? data.author?.date ?? null
+    return await getCommitDate(octokit, { owner, repo }, headSha)
   } catch {
     return null
   }
@@ -70,19 +74,12 @@ async function lastHumanCommentAt(
   pullNumber: number,
 ): Promise<HumanActivity> {
   try {
-    const { data: comments } = await ctx.octokit.rest.issues.listComments({
-      owner: ctx.ref.owner,
-      repo: ctx.ref.repo,
-      issue_number: pullNumber,
-      per_page: 100,
-      sort: 'created',
-      direction: 'desc',
-    })
+    const comments = await listIssueComments(ctx.octokit, ctx.ref, pullNumber)
     return {
       known: true,
       at:
-        comments.find((comment) => !isBotComment(comment.user?.login))
-          ?.created_at ?? null,
+        comments.find((comment) => !isBotComment(comment.userLogin))
+          ?.createdAt ?? null,
     }
   } catch (error) {
     return {
@@ -145,23 +142,18 @@ export async function applyStaleRules(
   if (inactiveDays < stale.daysUntilStale) {
     if (alreadyStale) {
       // Someone came back. Withdraw the warning rather than counting down.
-      await ctx.octokit.rest.issues.removeLabel({
-        owner: ctx.ref.owner,
-        repo: ctx.ref.repo,
-        issue_number: pullNumber,
-        name: stale.staleLabel,
-      })
+      await removeLabelIfPresent(
+        ctx.octokit,
+        ctx.ref,
+        pullNumber,
+        stale.staleLabel,
+      )
     }
     return
   }
 
   if (!alreadyStale) {
-    await ctx.octokit.rest.issues.addLabels({
-      owner: ctx.ref.owner,
-      repo: ctx.ref.repo,
-      issue_number: pullNumber,
-      labels: [stale.staleLabel],
-    })
+    await addLabelsToIssue(ctx.octokit, ctx.ref, pullNumber, [stale.staleLabel])
     await commentOnIssue(
       ctx.octokit,
       ctx.ref,
@@ -172,13 +164,7 @@ export async function applyStaleRules(
   }
 
   if (inactiveDays >= stale.daysUntilStale + stale.daysUntilClose) {
-    await ctx.octokit.rest.issues.update({
-      owner: ctx.ref.owner,
-      repo: ctx.ref.repo,
-      issue_number: pullNumber,
-      state: 'closed',
-      state_reason: 'not_planned',
-    })
+    await closeIssueAsNotPlanned(ctx.octokit, ctx.ref, pullNumber)
     await commentOnIssue(
       ctx.octokit,
       ctx.ref,
@@ -194,19 +180,12 @@ export async function sweepStalePullRequests(ctx: BotContext): Promise<number> {
   }
 
   let processed = 0
-  const iterator = ctx.octokit.paginate.iterator(ctx.octokit.rest.pulls.list, {
-    owner: ctx.ref.owner,
-    repo: ctx.ref.repo,
-    state: 'open',
-    per_page: 100,
-  })
+  const openPulls = await snapshotOpenPullRequests(ctx.octokit, ctx.ref)
 
-  for await (const { data: pulls } of iterator) {
-    for (const summary of pulls) {
-      const pr = await fetchPullRequest(ctx.octokit, ctx.ref, summary.number)
-      await applyStaleRules(ctx, summary.number, pr)
-      processed += 1
-    }
+  for (const summary of openPulls) {
+    const pr = await fetchPullRequest(ctx.octokit, ctx.ref, summary.number)
+    await applyStaleRules(ctx, summary.number, pr)
+    processed += 1
   }
 
   return processed

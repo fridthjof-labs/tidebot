@@ -51,6 +51,7 @@ tide:
   blockedLabels: [hold]
   requiredContexts: []
   autoRebaseWhenBehind: true
+  dismissLabelsOnPush: [lgtm, approved]
 ```
 
 Anything needing repository-specific knowledge stays off. A fresh install can
@@ -114,6 +115,7 @@ tide:
   blockedLabels: [hold]
   requiredContexts: [check]
   autoRebaseWhenBehind: true
+  dismissLabelsOnPush: [lgtm, approved]
   policies:
     - name: infra
       matchLabels: [area/infra]
@@ -132,6 +134,19 @@ The first policy whose `matchLabels` all match replaces the base check set for
 that pull request. `allowSkippedContexts` lets a `skipped` conclusion count as
 passing — needed when a workflow's own path filters legitimately skip a job.
 `autoMerge: false` on a policy makes Tidebot report the gate without merging.
+
+`dismissLabelsOnPush` withdraws review labels when a push changes what the pull
+request proposes. It covers the labels named here plus any the pull request's
+matching policy requires. Without it a `/lgtm` stays valid over any subsequent
+push.
+
+The comparison is the branch's own diff against its base, not the head sha and
+not the pusher, so an "update branch" merge and a clean rebase keep the labels.
+That is what allows `autoRebaseWhenBehind` to move a branch it has already
+approved. A comparison Tidebot cannot read, including one GitHub truncates at
+300 files, counts as changed.
+
+Set it to `[]` to turn it off.
 
 `autoRebaseWhenBehind` only touches pull requests that already carry every
 required label and no blocking one.
@@ -207,6 +222,7 @@ plan:
   workflowName: Infrastructure       # workflow_run.name
   workflowFile: infra.yml            # enables /plan
   planJobName: OpenTofu / plan
+  applyJobName: OpenTofu / apply     # optional; shows the apply's own output
   logBeginMarker: TIDEBOT_PLAN_LOG_BEGIN
   logEndMarker: TIDEBOT_PLAN_LOG_END
   actionsMarker: 'will perform the following actions:'
@@ -230,6 +246,23 @@ anything else that produces a plan-shaped diff.
 When the same workflow runs on a push to the default branch, Tidebot comments
 the apply result on the pull request whose merge commit triggered it.
 
+That comment is a one-line result unless `applyJobName` is set. With it,
+Tidebot reads the same markers out of the apply job and includes the output, so
+the comment that says production changed also says what changed:
+
+```yaml
+- run: |
+    echo TIDEBOT_PLAN_LOG_BEGIN
+    tofu apply -auto-approve -no-color
+    echo TIDEBOT_PLAN_LOG_END
+```
+
+`applyJobName` matches the start of a job name rather than the whole of it. A
+matrix job is named `<job> (<value>)`, so a prefix keeps a single job working
+and lets a fanned-out one report every leg, each labelled by the name that
+distinguishes it. Bodies are fenced, truncated and ANSI-stripped exactly as
+plan output is.
+
 ## `pipeline`
 
 ```yaml
@@ -238,6 +271,7 @@ plugins:
 
 pipeline:
   deployWorkflowName: Deploy         # workflow_run.name that refreshes the comment
+  statusInBody: true                 # mirror the verdict into the PR description
   previewApps:
     - name: Site
       environment: Site Preview      # GitHub deployment environment
@@ -247,6 +281,24 @@ pipeline:
 
 With no `previewApps` the preview table is omitted entirely rather than
 rendered empty. A live deployment's own URL always wins over `url`.
+
+### Where the status appears
+
+Tidebot writes the status to two places:
+
+- **The pull request body**, as a one-line verdict between
+  `<!-- tidebot-status-begin -->` and `<!-- tidebot-status-end -->`. Nothing the
+  author wrote is touched, and the block stays in view no matter how long the
+  conversation grows. Set `statusInBody: false` to leave the description alone.
+- **One upserted comment**, carrying the blockers, the failing checks with links
+  to their runs, preview deployments, and the plan section.
+
+The body block carries no timestamp. Writing the body raises
+`pull_request.edited`, which renders the block again, so the render has to
+converge on identical output for identical state.
+
+The comment plugin follows `plugins.commands`, not `plugins.pipeline` — the
+preview table is the only part `plugins.pipeline` gates.
 
 ## `stale`
 

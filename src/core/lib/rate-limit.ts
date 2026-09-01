@@ -1,3 +1,5 @@
+import { hasHttpStatus } from './http.js'
+
 function messageIncludesRateLimit(message: string): boolean {
   const normalized = message.toLowerCase()
   return (
@@ -15,7 +17,7 @@ export function isRateLimitError(error: unknown): boolean {
     if (messageIncludesRateLimit(error.message)) {
       return true
     }
-    if ('status' in error && (error.status === 403 || error.status === 429)) {
+    if (hasHttpStatus(error, 403, 429)) {
       return messageIncludesRateLimit(error.message)
     }
   }

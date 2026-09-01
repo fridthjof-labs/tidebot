@@ -39,6 +39,7 @@ export const DEFAULT_CONFIG: BotConfig = {
     blockedLabels: ['hold'],
     requiredContexts: [],
     autoRebaseWhenBehind: true,
+    dismissLabelsOnPush: ['lgtm', 'approved'],
     policies: [],
   },
   signedRebase: {
@@ -58,6 +59,7 @@ export const DEFAULT_CONFIG: BotConfig = {
   },
   pipeline: {
     previewApps: [],
+    statusInBody: true,
   },
   stale: {
     daysUntilStale: 14,

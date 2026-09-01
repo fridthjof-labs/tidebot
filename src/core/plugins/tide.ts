@@ -1,6 +1,11 @@
 import type { BotContext } from '../context.js'
-import { getChecksForRef, upsertIssueCommentWithMarker } from '../github.js'
-import { autoMergeFailedMarker, autoMergeMarker } from '../lib/markers.js'
+import {
+  getChecksForRef,
+  mergePullRequest,
+  upsertIssueCommentWithMarker,
+} from '../github.js'
+import { hasHttpStatus, httpMessage } from '../lib/http.js'
+import { autoMergeFailedMarker } from '../lib/markers.js'
 import { evaluateTide } from '../lib/tide.js'
 import type { CheckRun, PullRequest, Status } from '../types.js'
 
@@ -14,13 +19,13 @@ function isBenignMergeError(error: unknown): boolean {
     return false
   }
 
-  const message = error.message.toLowerCase()
+  const message = httpMessage(error)
   return (
     message.includes('merge already in progress') ||
     message.includes('pull request is not mergeable') ||
     message.includes('head branch was modified') ||
     message.includes('was closed') ||
-    ('status' in error && error.status === 409)
+    hasHttpStatus(error, 409)
   )
 }
 
@@ -44,26 +49,15 @@ export async function maybeAutoMerge(
 
   const mergeMethod = ctx.config.tide.mergeMethod
   try {
-    await ctx.octokit.rest.pulls.merge({
-      owner: ctx.ref.owner,
-      repo: ctx.ref.repo,
-      pull_number: pullNumber,
-      merge_method: mergeMethod,
-      // The checks above were evaluated against this commit. Without `sha`,
-      // a push landing between that evaluation and this call would merge code
-      // nobody reviewed; GitHub returns 409 instead, and the new head's own
-      // check_suite event re-runs the gate.
-      sha: pr.head.sha,
-    })
-    const marker = autoMergeMarker(pr.head.sha)
-    await upsertIssueCommentWithMarker(
+    await mergePullRequest(
       ctx.octokit,
       ctx.ref,
       pullNumber,
-      marker,
-      `Auto-merged with \`${mergeMethod}\` after required labels and checks passed.\n\n${marker}`,
-      ctx.identity.login,
+      mergeMethod,
+      pr.head.sha,
     )
+    // No comment on success. GitHub's merge event already records that Tidebot
+    // merged this, with the method and the commit.
   } catch (error) {
     if (isBenignMergeError(error)) {
       return

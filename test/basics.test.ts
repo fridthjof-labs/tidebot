@@ -5,7 +5,7 @@ import {
   failedRequiredContexts,
   missingRequiredContexts,
 } from '../src/core/lib/checks.js'
-import { autoMergeMarker, intakeMarker } from '../src/core/lib/markers.js'
+import { intakeMarker } from '../src/core/lib/markers.js'
 import { isRateLimitError } from '../src/core/lib/rate-limit.js'
 import { sizeLabelForDiff } from '../src/core/lib/size.js'
 import { resolveInactiveDays } from '../src/core/plugins/stale.js'
@@ -124,7 +124,6 @@ describe('identity placeholders', () => {
 
 describe('comment markers', () => {
   it('does not embed the App slug, so a rename keeps finding old comments', () => {
-    expect(autoMergeMarker('abc')).toBe('<!-- tidebot:auto-merge:abc -->')
     expect(intakeMarker(42)).toBe('<!-- tidebot-intake:comment:42 -->')
   })
 })

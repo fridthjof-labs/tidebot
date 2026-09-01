@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { diagnose } from '../src/cli/doctor.js'
 import {
   detectAreaRules,
@@ -16,6 +16,7 @@ import {
 } from '../src/cli/manifest.js'
 import { managedLabels } from '../src/core/config/defaults.js'
 import { parseConfig } from '../src/core/config/parse.js'
+import { fakeGitHub } from './fake-github.js'
 import { config } from './helpers.js'
 
 let root: string
@@ -130,21 +131,12 @@ describe('syncRepositoryLabels', () => {
   function octokitWith(
     existing: Array<{ name: string; color: string; description: string }>,
   ) {
-    const createLabel = vi.fn().mockResolvedValue({})
-    const updateLabel = vi.fn().mockResolvedValue({})
-    const octokit = {
-      paginate: {
-        iterator: () => [{ data: existing }],
-      },
-      rest: {
-        issues: {
-          listLabelsForRepo: vi.fn(),
-          createLabel,
-          updateLabel,
-        },
-      },
-    } as never
-    return { octokit, createLabel, updateLabel }
+    const { octokit, spy } = fakeGitHub({ repositoryLabels: existing })
+    return {
+      octokit,
+      createLabel: spy.createLabel,
+      updateLabel: spy.updateLabel,
+    }
   }
 
   it('creates the labels the config refers to', async () => {
@@ -228,23 +220,18 @@ describe('appManifest', () => {
 })
 
 describe('diagnose', () => {
-  function octokit(files: Record<string, unknown> = {}, labels: string[] = []) {
-    return {
-      paginate: {
-        iterator: () => [{ data: labels.map((name) => ({ name })) }],
-      },
-      rest: {
-        repos: {
-          getContent: vi.fn(async ({ path }) => {
-            if (path in files) {
-              return { data: files[path] }
-            }
-            throw Object.assign(new Error('Not Found'), { status: 404 })
-          }),
-        },
-        issues: { listLabelsForRepo: vi.fn() },
-      },
-    } as never
+  function octokit(
+    contents: Record<string, string | Array<{ name: string }>> = {},
+    labels: string[] = [],
+  ) {
+    return fakeGitHub({
+      contents,
+      repositoryLabels: labels.map((name) => ({
+        name,
+        color: '000000',
+        description: '',
+      })),
+    }).octokit
   }
 
   it('warns when a repository has no config of its own', async () => {
@@ -312,12 +299,8 @@ describe('diagnose', () => {
   it('errors when signed-rebase is on but its workflow is absent', async () => {
     const { findings } = await diagnose(
       octokit({
-        '.github/tidebot.yaml': {
-          type: 'file',
-          content: Buffer.from(
-            'commands:\n  updateBranchMethod: signed-rebase',
-          ).toString('base64'),
-        },
+        '.github/tidebot.yaml':
+          'commands:\n  updateBranchMethod: signed-rebase',
       }),
       { owner: 'acme', repo: 'widget' },
     )
@@ -328,5 +311,36 @@ describe('diagnose', () => {
           finding.message.includes('tidebot-rebase.yml'),
       ),
     ).toBe(true)
+  })
+})
+
+describe('diagnose runtime conflicts', () => {
+  function octokit(
+    contents: Record<string, string | Array<{ name: string }>> = {},
+  ) {
+    return fakeGitHub({ contents }).octokit
+  }
+
+  const ref = { owner: 'acme', repo: 'widget' }
+  const workflows = { '.github/workflows': [{ name: 'tidebot.yml' }] }
+
+  it('warns when the App and the in-repo workflow both run', async () => {
+    const { findings } = await diagnose(octokit(workflows), ref, {
+      installation: { permissions: {}, events: [] },
+    })
+
+    expect(
+      findings.some((finding) =>
+        finding.message.includes('both runtimes will handle every event'),
+      ),
+    ).toBe(true)
+  })
+
+  it('says nothing about the workflow when no App is installed', async () => {
+    const { findings } = await diagnose(octokit(workflows), ref)
+
+    expect(
+      findings.some((finding) => finding.message.includes('both runtimes')),
+    ).toBe(false)
   })
 })

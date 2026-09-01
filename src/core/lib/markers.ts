@@ -8,10 +8,6 @@ export const PIPELINE_COMMENT_MARKER = '<!-- tidebot-pipeline -->'
 export const PLAN_SECTION_BEGIN = '<!-- tidebot-plan-begin -->'
 export const PLAN_SECTION_END = '<!-- tidebot-plan-end -->'
 
-export function autoMergeMarker(sha: string): string {
-  return `<!-- tidebot:auto-merge:${sha} -->`
-}
-
 export function autoMergeFailedMarker(sha: string): string {
   return `<!-- tidebot:auto-merge-failed:${sha} -->`
 }
@@ -34,4 +30,19 @@ export function configErrorMarker(ref: {
 
 export function intakeMarker(commentId: number): string {
   return `<!-- tidebot-intake:comment:${commentId} -->`
+}
+
+/**
+ * Bounds the status block Tidebot maintains inside the pull request body.
+ * Everything outside the markers belongs to the author and is preserved.
+ */
+export const STATUS_BLOCK_BEGIN = '<!-- tidebot-status-begin -->'
+export const STATUS_BLOCK_END = '<!-- tidebot-status-end -->'
+
+/**
+ * Keys a reply to the comment that asked for it, making the reply an upsert.
+ * A second runtime handling the same delivery edits it rather than adding one.
+ */
+export function commandReplyMarker(commentId: number): string {
+  return `<!-- tidebot:reply:${commentId} -->`
 }

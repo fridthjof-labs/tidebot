@@ -6,6 +6,7 @@ import type {
   RepoRef,
   ResolvedTidePolicy,
   Status,
+  TideBlocker,
   TideDecision,
 } from '../types.js'
 import { hasLabel } from './auto-approve.js'
@@ -83,6 +84,28 @@ export function resolveTidePolicy(
   return base
 }
 
+/** The one place a blocker becomes prose, so logs and replies agree. */
+export function tideBlockerReason(blocker: TideBlocker): string {
+  switch (blocker.kind) {
+    case 'draft':
+      return 'PR is draft'
+    case 'not-open':
+      return 'PR is not open'
+    case 'conflict':
+      return 'PR is not mergeable'
+    case 'mergeable-state':
+      return `mergeable_state=${blocker.state}`
+    case 'auto-merge-disabled':
+      return 'auto-merge disabled for this PR policy'
+    case 'blocked-label':
+      return `blocked by label ${blocker.label}`
+    case 'missing-label':
+      return `missing label ${blocker.label}`
+    case 'missing-check':
+      return `missing passing check ${blocker.context}`
+  }
+}
+
 export function evaluateTide(
   pr: PullRequest,
   config: BotConfig['tide'],
@@ -90,33 +113,33 @@ export function evaluateTide(
   statuses: Status[],
 ): TideDecision {
   const policy = resolveTidePolicy(pr, config)
-  const reasons: string[] = []
+  const blockers: TideBlocker[] = []
 
   if (pr.draft) {
-    reasons.push('PR is draft')
+    blockers.push({ kind: 'draft' })
   }
   if (pr.state !== 'open') {
-    reasons.push('PR is not open')
+    blockers.push({ kind: 'not-open', state: pr.state })
   }
   if (pr.mergeable === false) {
-    reasons.push('PR is not mergeable')
+    blockers.push({ kind: 'conflict' })
   }
   if (pr.mergeable_state && pr.mergeable_state !== 'clean') {
-    reasons.push(`mergeable_state=${pr.mergeable_state}`)
+    blockers.push({ kind: 'mergeable-state', state: pr.mergeable_state })
   }
   if (!policy.autoMerge) {
-    reasons.push('auto-merge disabled for this PR policy')
+    blockers.push({ kind: 'auto-merge-disabled' })
   }
 
   for (const label of policy.blockedLabels) {
     if (hasLabel(pr, label)) {
-      reasons.push(`blocked by label ${label}`)
+      blockers.push({ kind: 'blocked-label', label })
     }
   }
 
   for (const label of policy.requiredLabels) {
     if (!hasLabel(pr, label)) {
-      reasons.push(`missing label ${label}`)
+      blockers.push({ kind: 'missing-label', label })
     }
   }
 
@@ -126,8 +149,13 @@ export function evaluateTide(
     statuses,
     policy.allowSkippedContexts,
   )) {
-    reasons.push(`missing passing check ${context}`)
+    blockers.push({ kind: 'missing-check', context })
   }
 
-  return { ready: reasons.length === 0, reasons, policyName: policy.policyName }
+  return {
+    ready: blockers.length === 0,
+    blockers,
+    reasons: blockers.map(tideBlockerReason),
+    policyName: policy.policyName,
+  }
 }

@@ -6,130 +6,61 @@ import {
   handlePullRequest,
   handleWorkflowRun,
 } from '../src/core/bot.js'
+import { PIPELINE_COMMENT_MARKER } from '../src/core/lib/markers.js'
 import type { PullRequest } from '../src/core/types.js'
+import {
+  type FakeCheckRun,
+  type FakeComment,
+  fakeGitHub,
+} from './fake-github.js'
 import { config, context, IDENTITY, pullRequest } from './helpers.js'
 
 type FakeState = {
   pr: PullRequest
   labels: string[]
-  checkRuns: Array<{
-    name: string
-    conclusion: string | null
-    started_at: string
-  }>
+  checkRuns: FakeCheckRun[]
   changedPaths: string[]
-  comments: Array<{ id: number; body: string; user: { login: string } }>
+  comments: FakeComment[]
 }
 
 /**
- * A fake Octokit narrow enough to read: it records the calls the assertions
- * care about and returns plausible shapes for the rest.
+ * The shared in-memory GitHub, wired to this file's authoring shape.
+ *
+ * Nothing here fakes an endpoint: paging, label removal and comment storage
+ * all come from `fakeGitHub`, so a test cannot pass against behaviour GitHub
+ * does not have.
  */
 function fakeOctokit(state: FakeState) {
-  const deleteComment = vi.fn().mockResolvedValue({})
-  const merge = vi.fn().mockResolvedValue({})
-  const addLabels = vi.fn(async ({ labels }: { labels: string[] }) => {
-    state.labels.push(...labels)
-    return {}
-  })
-  const removeLabel = vi.fn().mockResolvedValue({})
-  const createComment = vi.fn(async ({ body }: { body: string }) => {
-    state.comments.push({
-      id: state.comments.length + 1,
-      body,
-      user: { login: IDENTITY.login },
-    })
-    return {}
-  })
-  const updateComment = vi.fn(
-    async ({ comment_id, body }: { comment_id: number; body: string }) => {
-      const comment = state.comments.find((entry) => entry.id === comment_id)
-      if (comment) {
-        comment.body = body
-      }
-      return {}
+  const pullRecord = {
+    ...state.pr,
+    number: 42,
+    // The body lives on the caller's pull request so assertions can read the
+    // block Tidebot wrote back.
+    get body() {
+      return state.pr.body
     },
-  )
-  const updateBranch = vi.fn().mockResolvedValue({ data: {}, status: 202 })
-
-  const octokit = {
-    paginate: {
-      iterator: (endpoint: unknown) =>
-        endpoint === octokit.rest.pulls.listFiles
-          ? [{ data: state.changedPaths.map((filename) => ({ filename })) }]
-          : [{ data: [] }],
-    },
-    graphql: vi.fn(),
-    rest: {
-      pulls: {
-        listFiles: vi.fn(),
-        merge,
-        // The pipeline summary re-reads the pull request, so the fake serves
-        // the live state (labels added earlier in the same run included).
-        get: vi.fn(async () => ({
-          data: {
-            node_id: state.pr.id,
-            draft: state.pr.draft,
-            state: state.pr.state,
-            title: state.pr.title,
-            body: state.pr.body,
-            mergeable: state.pr.mergeable,
-            mergeable_state: state.pr.mergeable_state,
-            labels: state.labels.map((name) => ({ name })),
-            additions: state.pr.additions,
-            deletions: state.pr.deletions,
-            updated_at: state.pr.updated_at,
-            base: { ref: 'main' },
-            head: {
-              sha: state.pr.head.sha,
-              ref: state.pr.head.ref,
-              repo: { full_name: 'acme/widget' },
-            },
-            user: { login: state.pr.userLogin },
-          },
-        })),
-        updateBranch,
-        createReview: vi.fn().mockResolvedValue({}),
-        listReviews: vi.fn().mockResolvedValue({ data: [] }),
-      },
-      issues: {
-        addLabels,
-        removeLabel,
-        listLabelsOnIssue: vi.fn(async () => ({
-          data: state.labels.map((name) => ({ name })),
-        })),
-        listComments: vi.fn(async () => ({ data: state.comments })),
-        createComment,
-        updateComment,
-        deleteComment,
-        update: vi.fn().mockResolvedValue({}),
-      },
-      checks: {
-        listForRef: vi.fn(async () => ({
-          data: { check_runs: state.checkRuns },
-        })),
-      },
-      repos: {
-        listCommitStatusesForRef: vi.fn(async () => ({ data: [] })),
-        listDeployments: vi.fn(),
-        listDeploymentStatuses: vi.fn(async () => ({ data: [] })),
-      },
-      git: {
-        getCommit: vi.fn(async () => ({
-          data: { committer: { date: new Date().toISOString() } },
-        })),
-      },
+    set body(value: string | null | undefined) {
+      state.pr.body = value ?? null
     },
   }
 
+  const { octokit, spy } = fakeGitHub({
+    comments: state.comments,
+    labels: { 42: state.labels },
+    checkRuns: state.checkRuns,
+    changedPaths: state.changedPaths,
+    pulls: [pullRecord],
+  })
+
   return {
-    octokit: octokit as never,
-    merge,
-    addLabels,
-    createComment,
-    updateComment,
-    deleteComment,
-    updateBranch,
+    octokit,
+    merge: spy.merge,
+    addLabels: spy.addLabels,
+    createComment: spy.createComment,
+    updateComment: spy.updateComment,
+    deleteComment: spy.deleteComment,
+    updateBranch: spy.updateBranch,
+    updatePull: spy.updatePull,
   }
 }
 
@@ -202,6 +133,10 @@ describe('handlePullRequest', () => {
     expect(merge).toHaveBeenCalledWith(
       expect.objectContaining({ pull_number: 42, merge_method: 'squash' }),
     )
+    // GitHub's own merge event records this; a comment saying so is noise.
+    expect(
+      state.comments.some((comment) => comment.body.includes('Auto-merged')),
+    ).toBe(false)
   })
 
   it('merges only the commit whose checks it evaluated', async () => {
@@ -472,7 +407,7 @@ describe('handlePullRequest', () => {
     await handlePullRequest(ctx, 42, pr)
 
     expect(createComment).toHaveBeenCalledTimes(1)
-    expect(state.comments[0].body).toMatch('### Pipeline status')
+    expect(state.comments[0].body).toMatch(PIPELINE_COMMENT_MARKER)
   })
 
   it('renders the pipeline summary once per command, not twice', async () => {
@@ -496,8 +431,10 @@ describe('handlePullRequest', () => {
       userLogin: 'maintainer',
     })
 
-    const summaries = createComment.mock.calls.filter(
-      ([args]: [{ body: string }]) => args.body.includes('### Pipeline status'),
+    const summaries = createComment.mock.calls.filter((call) =>
+      String((call[0] as { body?: string })?.body ?? '').includes(
+        PIPELINE_COMMENT_MARKER,
+      ),
     )
     expect(summaries).toHaveLength(1)
   })
@@ -528,5 +465,196 @@ describe('handlePullRequest', () => {
     expect(deleteComment).not.toHaveBeenCalled()
     expect(createComment).toHaveBeenCalledTimes(1)
     expect(state.comments[0]).toEqual(impostor)
+  })
+
+  /**
+   * A repository can end up running Tidebot twice — the App and the in-repo
+   * Actions workflow — and each identity used to post its own copy of every
+   * marked comment. Whichever runs second must adopt the comment already there.
+   */
+  /**
+   * The status comment is written when the pull request opens, so on a long
+   * thread it is not among the newest hundred. Reading one page missed it and
+   * posted another one — on exactly the busy pull requests that motivated
+   * putting the status in the body in the first place.
+   */
+  it('finds its comment on a thread longer than one page', async () => {
+    const pr = pullRequest()
+    const state: FakeState = {
+      pr,
+      labels: [],
+      checkRuns: GREEN,
+      changedPaths: ['src/a.ts'],
+      comments: [
+        {
+          id: 1,
+          body: `${PIPELINE_COMMENT_MARKER}\nold status`,
+          user: { login: IDENTITY.login, type: 'Bot' },
+        },
+        ...Array.from({ length: 150 }, (_, i) => ({
+          id: i + 2,
+          body: 'chatter',
+          user: { login: 'someone' },
+        })),
+      ],
+    }
+    const { octokit, createComment, updateComment } = fakeOctokit(state)
+
+    await handlePullRequest(context({ octokit }), 42, pr)
+
+    expect(createComment).not.toHaveBeenCalled()
+    expect(updateComment).toHaveBeenCalledOnce()
+    expect(state.comments).toHaveLength(151)
+  })
+
+  /**
+   * Two runtimes racing, or a lookup that once missed, can leave more than one
+   * marked comment. The oldest survives because the pull request body links to
+   * it.
+   */
+  it('prunes duplicate marked comments down to the original', async () => {
+    const pr = pullRequest()
+    const state: FakeState = {
+      pr,
+      labels: [],
+      checkRuns: GREEN,
+      changedPaths: ['src/a.ts'],
+      comments: [
+        {
+          id: 1,
+          body: `${PIPELINE_COMMENT_MARKER}\noriginal`,
+          user: { login: IDENTITY.login, type: 'Bot' },
+        },
+        {
+          id: 2,
+          body: 'a human said something',
+          user: { login: 'a-human' },
+        },
+        {
+          id: 3,
+          body: `${PIPELINE_COMMENT_MARKER}\nduplicate`,
+          user: { login: 'github-actions[bot]', type: 'Bot' },
+        },
+      ],
+    }
+    const { octokit, createComment, updateComment, deleteComment } =
+      fakeOctokit(state)
+
+    await handlePullRequest(context({ octokit }), 42, pr)
+
+    expect(createComment).not.toHaveBeenCalled()
+    expect(updateComment).toHaveBeenCalledOnce()
+    expect(deleteComment).toHaveBeenCalledWith({ comment_id: 3 })
+    expect(state.comments.map((comment) => comment.id)).toEqual([1, 2])
+    expect(state.comments[0].body).not.toMatch('original')
+  })
+
+  it('adopts a marked comment another bot identity left', async () => {
+    const pr = pullRequest()
+    const other = {
+      id: 7,
+      body: `${PIPELINE_COMMENT_MARKER}\nstale status from the other runtime`,
+      user: { login: 'github-actions[bot]', type: 'Bot' },
+    }
+    const state: FakeState = {
+      pr,
+      labels: [],
+      checkRuns: GREEN,
+      changedPaths: ['src/a.ts'],
+      comments: [other],
+    }
+    const { octokit, createComment, updateComment } = fakeOctokit(state)
+
+    await handlePullRequest(context({ octokit }), 42, pr)
+
+    expect(createComment).not.toHaveBeenCalled()
+    expect(updateComment).toHaveBeenCalledOnce()
+    expect(state.comments).toHaveLength(1)
+    expect(state.comments[0].body).not.toMatch('stale status')
+  })
+
+  /**
+   * The upsert adopts a marked comment another Tidebot identity wrote. Anything
+   * reading state back out of that comment has to agree about which comment it
+   * is, or adopting one silently discards what it carried.
+   */
+  it("keeps a plan section carried by another identity's comment", async () => {
+    const pr = pullRequest()
+    const state: FakeState = {
+      pr,
+      labels: [],
+      checkRuns: GREEN,
+      changedPaths: ['src/a.ts'],
+      comments: [
+        {
+          id: 7,
+          body: [
+            PIPELINE_COMMENT_MARKER,
+            '<!-- tidebot-plan-begin -->',
+            '**Summary:** 1 add, 0 change, 0 destroy',
+            '<!-- tidebot-plan-end -->',
+          ].join('\n'),
+          user: { login: 'github-actions[bot]', type: 'Bot' },
+        },
+      ],
+    }
+    const { octokit } = fakeOctokit(state)
+
+    await handlePullRequest(context({ octokit }), 42, pr)
+
+    expect(state.comments).toHaveLength(1)
+    expect(state.comments[0].body).toMatch(
+      '**Summary:** 1 add, 0 change, 0 destroy',
+    )
+  })
+
+  it('mirrors the verdict into the pull request body, then leaves it alone', async () => {
+    const pr = pullRequest({ body: 'Fixes #1.' })
+    const state: FakeState = {
+      pr,
+      labels: [],
+      checkRuns: GREEN,
+      changedPaths: ['src/a.ts'],
+      comments: [],
+    }
+    const { octokit, updatePull } = fakeOctokit(state)
+
+    await handlePullRequest(context({ octokit }), 42, pr)
+
+    expect(updatePull).toHaveBeenCalledOnce()
+    expect(state.pr.body).toMatch('Fixes #1.')
+    expect(state.pr.body).toMatch('**Tidebot — 👀 Waiting for review**')
+
+    // A second pass renders the same block, so it must not write again —
+    // every write raises `pull_request.edited` and would loop.
+    await handlePullRequest(context({ octokit }), 42, {
+      ...pr,
+      body: state.pr.body,
+    })
+    expect(updatePull).toHaveBeenCalledOnce()
+  })
+
+  it('leaves the body untouched when statusInBody is off', async () => {
+    const pr = pullRequest({ body: 'Fixes #1.' })
+    const state: FakeState = {
+      pr,
+      labels: [],
+      checkRuns: GREEN,
+      changedPaths: ['src/a.ts'],
+      comments: [],
+    }
+    const { octokit, updatePull } = fakeOctokit(state)
+
+    await handlePullRequest(
+      context({
+        octokit,
+        config: config({ pipeline: { statusInBody: false } }),
+      }),
+      42,
+      pr,
+    )
+
+    expect(updatePull).not.toHaveBeenCalled()
+    expect(state.pr.body).toBe('Fixes #1.')
   })
 })

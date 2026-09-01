@@ -1,22 +1,118 @@
 import type { Octokit } from '@octokit/rest'
+import { hasHttpStatus } from '../lib/http.js'
 import type { RepoRef } from '../types.js'
 
+/** An issue comment or an issue: both carry an author and a body. */
+type Authored = {
+  body?: string | null
+  user?: { login?: string; type?: string } | null
+}
+
 /**
- * Comments this bot wrote, identified by author rather than by content.
+ * The comments and issues Tidebot may edit or prune: its own, plus any other
+ * bot account's carrying the same marker.
  *
- * Matching a marker alone would let anyone who can comment take control of
- * the bot's own bookkeeping: a comment containing the marker string would be
- * overwritten in place, and — worse — pruned as a duplicate. `issues: write`
- * lets an App edit and delete anyone's comment, so that is a data-loss bug
- * triggerable by any drive-by commenter, not a cosmetic one.
+ * The trust boundary is the author's type rather than its login. `issues:
+ * write` lets an App edit and delete anyone's comment, so matching on the
+ * marker alone would let any commenter have their comment overwritten and
+ * pruned. GitHub never reports a human as type `Bot`.
+ *
+ * Matching other bot accounts is deliberate: a repository running both the App
+ * and the in-repo Actions workflow acts under two logins, and the second to
+ * run must adopt the first one's comment rather than post its own.
  */
-function ownComments<
-  T extends { body?: string; user?: { login?: string } | null },
->(comments: T[], marker: string, botLogin: string): T[] {
-  return comments.filter(
-    (comment) =>
-      comment.user?.login === botLogin && comment.body?.includes(marker),
+function botAuthoredWithMarker<T extends Authored>(
+  items: T[],
+  marker: string,
+  botLogin: string,
+): T[] {
+  return items.filter(
+    (item) =>
+      (item.user?.login === botLogin || item.user?.type === 'Bot') &&
+      item.body?.includes(marker),
   )
+}
+
+/**
+ * Every comment on an issue, oldest first.
+ *
+ * The full list matters because the status comment is written when the pull
+ * request opens: on a long thread it is not in the newest page, and a lookup
+ * that misses it posts a second one.
+ *
+ * Oldest first so a prune keeps the original. The pull request body links to
+ * it, and that link has to stay valid.
+ */
+export type IssueComment = {
+  id: number
+  body?: string | null
+  createdAt: string
+  userLogin: string | null
+}
+
+/**
+ * The most recent comments on an issue, newest first.
+ *
+ * Bounded to one page on purpose. Callers here are asking what happened
+ * lately, and the stale sweep asks it once per open pull request, so walking
+ * the full history of a long thread would cost a request per hundred comments
+ * for an answer that is always near the top.
+ */
+export async function listIssueComments(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  issueNumber: number,
+): Promise<IssueComment[]> {
+  const { data: comments } = await octokit.rest.issues.listComments({
+    owner,
+    repo,
+    issue_number: issueNumber,
+    per_page: 100,
+    sort: 'created',
+    direction: 'desc',
+  })
+  return comments.map((comment) => ({
+    id: comment.id,
+    body: comment.body,
+    createdAt: comment.created_at,
+    userLogin: comment.user?.login ?? null,
+  }))
+}
+
+async function listAllIssueComments(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  issueNumber: number,
+): Promise<Array<Authored & { id: number }>> {
+  return octokit.paginate(octokit.rest.issues.listComments, {
+    owner,
+    repo,
+    issue_number: issueNumber,
+    per_page: 100,
+    sort: 'created',
+    direction: 'asc',
+  })
+}
+
+/**
+ * The marked comment the upsert would edit, if it exists.
+ *
+ * Readers that carry state forward out of that comment must resolve it the
+ * same way the upsert does. Two different ownership rules mean the upsert
+ * adopts a comment the reader cannot see, and its contents are overwritten.
+ */
+export async function findManagedIssueComment(
+  octokit: Octokit,
+  ref: RepoRef,
+  issueNumber: number,
+  marker: string,
+  botLogin: string,
+): Promise<string | null> {
+  if (!octokit.paginate) {
+    return null
+  }
+  const comments = await listAllIssueComments(octokit, ref, issueNumber)
+  return botAuthoredWithMarker(comments, marker, botLogin)[0]?.body ?? null
 }
 
 export async function upsertIssueCommentWithMarker(
@@ -26,61 +122,39 @@ export async function upsertIssueCommentWithMarker(
   marker: string,
   body: string,
   botLogin: string,
-): Promise<void> {
+): Promise<string | null> {
   const { owner, repo } = ref
-  const { data: comments } = await octokit.rest.issues.listComments({
-    owner,
-    repo,
-    issue_number: issueNumber,
-    per_page: 100,
-    sort: 'created',
-    direction: 'desc',
-  })
+  const comments = await listAllIssueComments(octokit, ref, issueNumber)
 
-  const [existing] = ownComments(comments, marker, botLogin)
-  if (existing) {
-    await octokit.rest.issues.updateComment({
-      owner,
-      repo,
-      comment_id: existing.id,
-      body,
-    })
-  } else {
-    await octokit.rest.issues.createComment({
-      owner,
-      repo,
-      issue_number: issueNumber,
-      body,
-    })
-  }
+  const managed = botAuthoredWithMarker(comments, marker, botLogin)
+  const [existing] = managed
+  const written = existing
+    ? await octokit.rest.issues.updateComment({
+        owner,
+        repo,
+        comment_id: existing.id,
+        body,
+      })
+    : await octokit.rest.issues.createComment({
+        owner,
+        repo,
+        issue_number: issueNumber,
+        body,
+      })
 
-  await pruneIssueCommentDuplicatesWithMarker(
-    octokit,
-    ref,
-    issueNumber,
-    marker,
-    botLogin,
-  )
+  // Anything managed beyond the one just written is a duplicate. Computed
+  // from the listing above rather than re-reading the thread, which on a long
+  // one is a request per hundred comments.
+  await deleteComments(octokit, ref, existing ? managed.slice(1) : [])
+
+  return written.data.html_url
 }
 
-async function pruneIssueCommentDuplicatesWithMarker(
+async function deleteComments(
   octokit: Octokit,
   { owner, repo }: RepoRef,
-  issueNumber: number,
-  marker: string,
-  botLogin: string,
+  duplicates: Array<{ id: number }>,
 ): Promise<void> {
-  const { data: comments } = await octokit.rest.issues.listComments({
-    owner,
-    repo,
-    issue_number: issueNumber,
-    per_page: 100,
-    sort: 'created',
-    direction: 'desc',
-  })
-
-  const duplicates = ownComments(comments, marker, botLogin).slice(1)
-
   for (const duplicate of duplicates) {
     try {
       await octokit.rest.issues.deleteComment({
@@ -89,12 +163,8 @@ async function pruneIssueCommentDuplicatesWithMarker(
         comment_id: duplicate.id,
       })
     } catch (error) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'status' in error &&
-        error.status === 404
-      ) {
+      // Already deleted by another runtime or a human.
+      if (hasHttpStatus(error, 404)) {
         continue
       }
       throw error
@@ -123,6 +193,9 @@ export async function findIssueByBodyMarker(
   marker: string,
   botLogin: string,
 ): Promise<{ number: number; htmlUrl: string } | null> {
+  // Newest page only. The marker names an issue this bot filed for a specific
+  // comment, so it is recent; paginating every issue in the repository would
+  // cost a request per hundred for an answer that is at the top or absent.
   const { data: issues } = await octokit.rest.issues.listForRepo({
     owner,
     repo,
@@ -131,10 +204,7 @@ export async function findIssueByBodyMarker(
     direction: 'desc',
     per_page: 100,
   })
-  const issue = issues.find(
-    (candidate) =>
-      candidate.user?.login === botLogin && candidate.body?.includes(marker),
-  )
+  const [issue] = botAuthoredWithMarker(issues, marker, botLogin)
   return issue ? { number: issue.number, htmlUrl: issue.html_url } : null
 }
 
@@ -155,19 +225,11 @@ export async function createIssue(
 
 export async function hasIssueCommentMarker(
   octokit: Octokit,
-  { owner, repo }: RepoRef,
+  ref: RepoRef,
   issueNumber: number,
   marker: string,
   botLogin: string,
 ): Promise<boolean> {
-  const { data: comments } = await octokit.rest.issues.listComments({
-    owner,
-    repo,
-    issue_number: issueNumber,
-    per_page: 100,
-    sort: 'created',
-    direction: 'desc',
-  })
-
-  return ownComments(comments, marker, botLogin).length > 0
+  const comments = await listAllIssueComments(octokit, ref, issueNumber)
+  return botAuthoredWithMarker(comments, marker, botLogin).length > 0
 }

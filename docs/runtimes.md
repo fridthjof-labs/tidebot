@@ -31,6 +31,35 @@ Tidebot's own included. Uncomment that trigger, naming the specific workflows,
 if you enable the `plan` or `pipeline` plugins — they read job logs and
 deployment statuses that only `workflow_run` reports.
 
+## The core layers
+
+Below the runtimes, the core is three layers:
+
+- `core/github/` is the only place that constructs a GitHub request. Nothing
+  above it names an endpoint, a status code or a snake_case field.
+- `core/lib/` is pure. It holds the merge gate and every rendered string, so
+  both are testable without a client.
+- `core/plugins/` is one file per behaviour, composing the two.
+
+`test/fake-github.ts` serves an in-memory repository to a real `Octokit`
+instance through a custom `fetch`. Pagination, request building and error
+construction are the client's own, so tests exercise the same code paths the
+bot does.
+
+## One runtime per repository
+
+The three runtimes are alternatives, not layers. A repository that both installs
+the App *and* keeps `.github/workflows/tidebot.yml` runs every handler twice
+under two identities — `github-actions[bot]` and `<slug>[bot]` — which doubles
+the API cost against a shared rate limit and races two writers against the same
+pull request.
+
+Tidebot degrades rather than duplicating: marked comments are matched by author
+type, so whichever identity runs second adopts the comment the first one left,
+and command replies are keyed to the comment that triggered them. `tidebot
+doctor` warns when it sees both. The configuration is still the thing to fix —
+delete the workflow, or drop the repository from the App installation.
+
 ## Cloudflare Worker
 
 The request path verifies the signature and body limit, writes the delivery to

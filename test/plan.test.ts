@@ -111,4 +111,38 @@ describe('formatApplyComment', () => {
       '✅ Infrastructure plan apply **success** on `trunk` (`abcdef1`).',
     )
   })
+
+  it('stays a single line when there is no output to show', () => {
+    expect(
+      formatApplyComment(PLAN, 'success', 'abcdef1234', 'trunk', []),
+    ).not.toMatch('```')
+  })
+
+  it('fences a single apply body without labelling it', () => {
+    const comment = formatApplyComment(PLAN, 'success', 'abcdef1234', 'trunk', [
+      {
+        name: 'OpenTofu / apply',
+        body: 'Terraform will perform the following actions:\n  + create\nApply: 1 added, 0 changed, 0 destroyed.',
+      },
+    ])
+    expect(comment).toMatch('```hcl')
+    expect(comment).toMatch('Apply: 1 added, 0 changed, 0 destroyed.')
+    expect(comment).not.toMatch('**OpenTofu / apply**')
+  })
+
+  it('labels each leg when a matrix applied more than one target', () => {
+    const comment = formatApplyComment(PLAN, 'success', 'abcdef1234', 'trunk', [
+      { name: 'OpenTofu / apply (github-platform)', body: 'No changes.' },
+      { name: 'OpenTofu / apply (tidebot)', body: 'No changes.' },
+    ])
+    expect(comment).toMatch('**OpenTofu / apply (github-platform)**')
+    expect(comment).toMatch('**OpenTofu / apply (tidebot)**')
+  })
+
+  it('does not let apply output break out of its fence', () => {
+    const comment = formatApplyComment(PLAN, 'failure', 'abcdef1234', 'trunk', [
+      { name: 'OpenTofu / apply', body: 'No changes.\n```\nforged' },
+    ])
+    expect(comment).toMatch('````')
+  })
 })

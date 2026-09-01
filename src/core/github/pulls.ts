@@ -1,5 +1,6 @@
 import type { Octokit } from '@octokit/rest'
-import type { PullRequest, RepoRef } from '../types.js'
+import { hasHttpStatus, httpMessage } from '../lib/http.js'
+import type { MergeMethod, PullRequest, RepoRef } from '../types.js'
 
 export async function getRepository(
   octokit: Octokit,
@@ -59,6 +60,164 @@ export async function getPullRequestChangedPaths(
   }
 
   return paths
+}
+
+/** GitHub returns at most this many files from a comparison. */
+const COMPARE_FILE_LIMIT = 300
+
+/**
+ * A fingerprint of what a commit proposes against a base: the diff itself,
+ * not the commit it lives on.
+ *
+ * GitHub's compare uses the merge base, so this covers only the branch's own
+ * changes. Two revisions with the same fingerprint propose the same code, which
+ * is what makes an "update branch" merge or a clean rebase distinguishable from
+ * a push that adds new work.
+ */
+export async function proposedDiffFingerprint(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  base: string,
+  head: string,
+): Promise<string | null> {
+  try {
+    const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
+      owner,
+      repo,
+      basehead: `${base}...${head}`,
+    })
+
+    // GitHub caps this response at 300 files. Beyond that the list is a
+    // prefix, and two different diffs can share one, so an equal fingerprint
+    // would no longer mean equal content.
+    const files = data.files ?? []
+    if (files.length >= COMPARE_FILE_LIMIT) {
+      return null
+    }
+
+    return JSON.stringify(
+      files.map((file) => [
+        file.filename,
+        file.status,
+        // Binary and oversized files carry no patch; their blob sha still moves
+        // when the content does.
+        file.patch ?? file.sha,
+      ]),
+    )
+  } catch {
+    return null
+  }
+}
+
+export type PullRequestSummary = {
+  number: number
+  mergedAt: string | null
+  mergeCommitSha: string | null
+}
+
+function toSummary(pull: {
+  number: number
+  merged_at?: string | null
+  merge_commit_sha?: string | null
+}): PullRequestSummary {
+  return {
+    number: pull.number,
+    mergedAt: pull.merged_at ?? null,
+    mergeCommitSha: pull.merge_commit_sha ?? null,
+  }
+}
+
+/** Open pull requests against a base branch, most recently updated first. */
+export async function listOpenPullRequests(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  options: { base?: string; limit?: number } = {},
+): Promise<PullRequestSummary[]> {
+  const { data } = await octokit.rest.pulls.list({
+    owner,
+    repo,
+    state: 'open',
+    base: options.base,
+    per_page: options.limit ?? 100,
+    sort: 'updated',
+    direction: 'desc',
+  })
+  return data.map(toSummary)
+}
+
+/** Recently closed pull requests, for matching a merge commit back to one. */
+export async function listRecentlyClosedPullRequests(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  limit = 30,
+): Promise<PullRequestSummary[]> {
+  const { data } = await octokit.rest.pulls.list({
+    owner,
+    repo,
+    state: 'closed',
+    sort: 'updated',
+    direction: 'desc',
+    per_page: limit,
+  })
+  return data.map(toSummary)
+}
+
+/**
+ * A snapshot of every open pull request.
+ *
+ * Read in full before any caller acts on it. The stale sweep closes pull
+ * requests, which removes them from this same filtered set, and paging while
+ * that happens shifts later offsets down and skips entries.
+ *
+ * Mapped per page so only the summaries accumulate: the raw listing carries
+ * nested repository, user and branch objects that are an order of magnitude
+ * larger and that nothing here reads.
+ */
+export async function snapshotOpenPullRequests(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+): Promise<PullRequestSummary[]> {
+  return octokit.paginate(
+    octokit.rest.pulls.list,
+    { owner, repo, state: 'open', per_page: 100 },
+    (response) => response.data.map(toSummary),
+  )
+}
+
+/**
+ * Merge, pinned to the commit whose checks were evaluated. Without `sha` a
+ * push landing between that evaluation and this call would merge code nobody
+ * reviewed; GitHub answers 409 instead, and the new head's own check_suite
+ * event re-runs the gate.
+ */
+export async function mergePullRequest(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  pullNumber: number,
+  mergeMethod: MergeMethod,
+  headSha: string,
+): Promise<void> {
+  await octokit.rest.pulls.merge({
+    owner,
+    repo,
+    pull_number: pullNumber,
+    merge_method: mergeMethod,
+    sha: headSha,
+  })
+}
+
+export async function closeIssueAsNotPlanned(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  issueNumber: number,
+): Promise<void> {
+  await octokit.rest.issues.update({
+    owner,
+    repo,
+    issue_number: issueNumber,
+    state: 'closed',
+    state_reason: 'not_planned',
+  })
 }
 
 export async function findOpenPullRequestForSha(
@@ -128,7 +287,7 @@ export async function updatePullRequestBranch(
       (error.message.includes(
         'merge conflict between base and head (updatePullRequestBranch)',
       ) ||
-        ('status' in error && error.status === 422))
+        hasHttpStatus(error, 422))
         ? 'Cannot update branch — resolve merge conflicts with the base branch first.'
         : error instanceof Error
           ? error.message
@@ -144,15 +303,10 @@ export async function updatePullRequestBranch(
  * existed when GitHub had refused to create one.
  */
 function isAlreadyApprovedError(error: unknown): boolean {
-  if (
-    typeof error !== 'object' ||
-    error === null ||
-    !('status' in error) ||
-    error.status !== 422
-  ) {
+  if (!hasHttpStatus(error, 422)) {
     return false
   }
-  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  const message = httpMessage(error)
   return (
     message.includes('already approved') ||
     message.includes('can only be submitted once') ||
@@ -229,6 +383,44 @@ export async function dismissBotPullRequestApproval(
         error instanceof Error ? error.message : 'Failed to dismiss approval.',
     }
   }
+}
+
+/**
+ * Compare bodies as GitHub stores them.
+ *
+ * Bodies submitted through the web form read back with CRLF, so text rendered
+ * with LF is byte-different while being the same body. The guard below depends
+ * on this comparison being about content rather than encoding.
+ */
+function sameBody(left: string, right: string): boolean {
+  return left.replace(/\r\n/g, '\n') === right.replace(/\r\n/g, '\n')
+}
+
+/**
+ * Write a rewritten pull request body, but only when it differs from the
+ * current one.
+ *
+ * The no-op guard is required for termination rather than for economy: the
+ * write raises `pull_request.edited`, which renders the body again.
+ */
+export async function updatePullRequestBody(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  pullNumber: number,
+  body: string,
+  currentBody: string | null | undefined,
+): Promise<boolean> {
+  if (sameBody(currentBody ?? '', body)) {
+    return false
+  }
+
+  await octokit.rest.pulls.update({
+    owner,
+    repo,
+    pull_number: pullNumber,
+    body,
+  })
+  return true
 }
 
 export async function fetchPullRequest(

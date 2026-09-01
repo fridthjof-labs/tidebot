@@ -1,6 +1,8 @@
 import type { BotContext } from '../context.js'
 import {
+  downloadMatchingWorkflowJobLogs,
   downloadWorkflowJobLogs,
+  listRecentlyClosedPullRequests,
   upsertIssueCommentWithMarker,
 } from '../github.js'
 import { applyMarker } from '../lib/markers.js'
@@ -49,21 +51,32 @@ async function postApplyComment(
   ctx: BotContext,
   workflowRun: WorkflowRunPayload,
 ): Promise<void> {
-  const { data: pulls } = await ctx.octokit.rest.pulls.list({
-    owner: ctx.ref.owner,
-    repo: ctx.ref.repo,
-    state: 'closed',
-    sort: 'updated',
-    direction: 'desc',
-    per_page: 30,
-  })
+  const pulls = await listRecentlyClosedPullRequests(ctx.octokit, ctx.ref)
 
   const merged = pulls.find(
-    (pull) => pull.merged_at && pull.merge_commit_sha === workflowRun.head_sha,
+    (pull) => pull.mergedAt && pull.mergeCommitSha === workflowRun.head_sha,
   )
   if (!merged) {
     return
   }
+
+  // The apply's own output, when the repository names the job that carries
+  // it. Reporting only a conclusion means the one comment that says what
+  // production actually changed says the least about it.
+  const applyJobName = ctx.config.plan.applyJobName
+  const outputs = applyJobName
+    ? (
+        await downloadMatchingWorkflowJobLogs(
+          ctx.octokit,
+          ctx.ref,
+          workflowRun.id,
+          applyJobName,
+        )
+      ).flatMap((job) => {
+        const body = parsePlanLogFromJobLogs(job.logs, ctx.config.plan)
+        return body ? [{ name: job.name, body }] : []
+      })
+    : []
 
   const marker = applyMarker(workflowRun.head_sha)
   await upsertIssueCommentWithMarker(
@@ -76,6 +89,7 @@ async function postApplyComment(
       workflowRun.conclusion ?? 'unknown',
       workflowRun.head_sha,
       ctx.defaultBranch,
+      outputs,
     )}\n\n${marker}`,
     ctx.identity.login,
   )
