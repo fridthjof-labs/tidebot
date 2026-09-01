@@ -364,9 +364,24 @@ describe('loadManifest', () => {
     expect(manifest.public).toBe(false)
   })
 
-  it('leaves the webhook inactive unless the file says otherwise', () => {
-    // An App that only holds a credential has no reason to receive deliveries.
-    expect(loadManifest(secretsOnly).hook_attributes).toEqual({ active: false })
+  it('omits hook_attributes for an App with no webhook', () => {
+    // GitHub requires hook_attributes.url whenever the block is present, even
+    // with active: false, and rejects the manifest with "url wasn't supplied".
+    // An App that only holds a credential has no webhook, so the block is
+    // absent rather than inactive.
+    expect(loadManifest(secretsOnly)).not.toHaveProperty('hook_attributes')
+  })
+
+  it('refuses hook_attributes without a url', () => {
+    expect(() =>
+      loadManifest(
+        JSON.stringify({
+          name: 'x',
+          default_permissions: { secrets: 'write' },
+          hook_attributes: { active: false },
+        }),
+      ),
+    ).toThrow('hook_attributes.url is required')
   })
 
   it('refuses a manifest with no permissions or no name', () => {

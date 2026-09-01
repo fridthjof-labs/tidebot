@@ -57,8 +57,9 @@ export function appManifest(input: {
  * hands the credentials to code rather than to a person's clipboard.
  *
  * `redirect_url` is the CLI's to set, since it points at the local callback.
- * A webhook defaults to inactive: an App that only holds credentials has no
- * reason to receive deliveries.
+ * An App with no webhook omits `hook_attributes` entirely: GitHub requires
+ * `hook_attributes.url` whenever the block is present, even inactive, and
+ * rejects the manifest with a bare "url wasn't supplied" otherwise.
  */
 export function loadManifest(json: string): Record<string, unknown> {
   let parsed: unknown
@@ -93,9 +94,20 @@ export function loadManifest(json: string): Record<string, unknown> {
     )
   }
 
+  const hook = manifest.hook_attributes
+  if (
+    hook !== undefined &&
+    (typeof hook !== 'object' ||
+      hook === null ||
+      typeof (hook as { url?: unknown }).url !== 'string')
+  ) {
+    throw new Error(
+      'manifest.hook_attributes.url is required when hook_attributes is present; omit the block for an App with no webhook',
+    )
+  }
+
   return {
     ...manifest,
-    hook_attributes: manifest.hook_attributes ?? { active: false },
     default_events: manifest.default_events ?? [],
     public: manifest.public ?? false,
   }
