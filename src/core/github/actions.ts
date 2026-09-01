@@ -6,48 +6,94 @@ import type { RepoRef } from '../types.js'
 // chatter without letting an unbounded job log exhaust Worker memory.
 const MAX_WORKFLOW_JOB_LOG_BYTES = 8 * 1024 * 1024
 
-export async function downloadWorkflowJobLogs(
+async function downloadJobLog(
   octokit: Octokit,
   { owner, repo }: RepoRef,
+  jobId: number,
+): Promise<string | null> {
+  const response = await octokit.request(
+    'GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs',
+    { owner, repo, job_id: jobId, request: { redirect: 'manual' } },
+  )
+
+  const location =
+    typeof response.headers.location === 'string'
+      ? response.headers.location
+      : null
+  if (!location) {
+    return null
+  }
+
+  const logResponse = await fetch(location)
+  return logResponse.ok
+    ? await readTextWithLimit(
+        logResponse.body,
+        logResponse.headers.get('content-length'),
+        MAX_WORKFLOW_JOB_LOG_BYTES,
+      )
+    : null
+}
+
+export async function downloadWorkflowJobLogs(
+  octokit: Octokit,
+  ref: RepoRef,
   workflowRunId: number,
   jobName: string,
 ): Promise<string | null> {
   try {
     const { data: jobs } = await octokit.rest.actions.listJobsForWorkflowRun({
-      owner,
-      repo,
+      owner: ref.owner,
+      repo: ref.repo,
       run_id: workflowRunId,
       per_page: 100,
     })
 
     const job = jobs.jobs.find((entry) => entry.name === jobName)
-    if (!job) {
-      return null
-    }
-
-    const response = await octokit.request(
-      'GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs',
-      { owner, repo, job_id: job.id, request: { redirect: 'manual' } },
-    )
-
-    const location =
-      typeof response.headers.location === 'string'
-        ? response.headers.location
-        : null
-    if (!location) {
-      return null
-    }
-
-    const logResponse = await fetch(location)
-    return logResponse.ok
-      ? await readTextWithLimit(
-          logResponse.body,
-          logResponse.headers.get('content-length'),
-          MAX_WORKFLOW_JOB_LOG_BYTES,
-        )
-      : null
+    return job ? await downloadJobLog(octokit, ref, job.id) : null
   } catch {
     return null
+  }
+}
+
+// ponytail: enough for a matrix that applies every root of a small estate;
+// past that the comment would be unreadable long before the cap bites.
+const MAX_MATCHED_JOBS = 12
+
+/**
+ * Logs for every job whose name starts with `jobNamePrefix`, in the run's own
+ * order. A matrix job is named `<job> (<value>)`, so an exact-name lookup
+ * finds nothing for one; matching a prefix keeps a single job working and
+ * lets a fanned-out one report each leg, labelled by the name that
+ * distinguishes it.
+ */
+export async function downloadMatchingWorkflowJobLogs(
+  octokit: Octokit,
+  ref: RepoRef,
+  workflowRunId: number,
+  jobNamePrefix: string,
+): Promise<Array<{ name: string; logs: string }>> {
+  try {
+    const { data: jobs } = await octokit.rest.actions.listJobsForWorkflowRun({
+      owner: ref.owner,
+      repo: ref.repo,
+      run_id: workflowRunId,
+      per_page: 100,
+    })
+
+    const matched = jobs.jobs
+      .filter((entry) => entry.name.startsWith(jobNamePrefix))
+      .slice(0, MAX_MATCHED_JOBS)
+
+    const collected: Array<{ name: string; logs: string }> = []
+    for (const job of matched) {
+      const logs = await downloadJobLog(octokit, ref, job.id)
+      if (logs) {
+        collected.push({ name: job.name, logs })
+      }
+    }
+    return collected
+  } catch {
+    return []
   }
 }
 

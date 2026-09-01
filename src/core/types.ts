@@ -190,6 +190,11 @@ export type BotConfig = {
     /** Workflow file dispatched by `/plan`; `/plan` is off when unset. */
     workflowFile?: string
     planJobName: string
+    /**
+     * Job carrying the apply output, matched as a name prefix so a matrix
+     * job counts. The apply comment stays a one-line result when unset.
+     */
+    applyJobName?: string
     logBeginMarker: string
     logEndMarker: string
     /** Line that starts the human-readable plan body in the job log. */
