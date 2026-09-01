@@ -284,11 +284,21 @@ async function commandApp(args: Args): Promise<void> {
   console.log(
     `Credentials written to ${outFile} (mode 600 — do not commit it).\n`,
   )
-  console.log('Set these where the bot runs:')
-  console.log(`  TIDEBOT_APP_ID=${created.id}`)
-  console.log('  TIDEBOT_PRIVATE_KEY=<the "pem" field>')
-  console.log('  TIDEBOT_WEBHOOK_SECRET=<the "webhookSecret" field>\n')
-  console.log(`Then install it: ${created.htmlUrl}/installations/new`)
+  if (manifest) {
+    // An App from a file is not Tidebot; its consumer knows what to do with
+    // the id and pem. Only the install step is common to every App.
+    console.log(`App ID ${created.id}; the private key is the "pem" field.`)
+  } else {
+    console.log('Set these where the bot runs:')
+    console.log(`  TIDEBOT_APP_ID=${created.id}`)
+    console.log('  TIDEBOT_PRIVATE_KEY=<the "pem" field>')
+    console.log('  TIDEBOT_WEBHOOK_SECRET=<the "webhookSecret" field>')
+  }
+  console.log(`\nThen install it: ${created.htmlUrl}/installations/new`)
+  console.log(
+    'Read the installation ID back afterwards with `tidebot app show`, with',
+    'TIDEBOT_APP_ID and TIDEBOT_PRIVATE_KEY set from the file.',
+  )
 }
 
 async function commandKeygen(args: Args): Promise<void> {
