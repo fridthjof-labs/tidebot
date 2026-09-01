@@ -1,6 +1,7 @@
 import type {
   BotConfig,
   CheckRun,
+  PullRequest,
   TideBlocker,
   TideDecision,
 } from '../types.js'
@@ -34,7 +35,28 @@ export function verdictFor(
   tide: TideDecision,
   checkRuns: CheckRun[],
   config: BotConfig,
+  pr?: Pick<PullRequest, 'state' | 'merged'>,
 ): Verdict {
+  // A pull request that is over is reporting an outcome, not a merge gate.
+  // Rendering it as blocked reads as a failure on one that in fact merged, and
+  // its blockers are artefacts: GitHub stops computing mergeability once a
+  // pull request closes.
+  if (pr && pr.state !== 'open') {
+    return pr.merged
+      ? {
+          alert: 'TIP',
+          icon: GLYPH.passed,
+          headline: 'Merged',
+          detail: 'Nothing further for Tidebot to do here.',
+        }
+      : {
+          alert: 'NOTE',
+          icon: GLYPH.unknown,
+          headline: 'Closed without merging',
+          detail: 'Reopen the pull request to put it back on the merge gate.',
+        }
+  }
+
   if (tide.ready) {
     return {
       alert: 'TIP',

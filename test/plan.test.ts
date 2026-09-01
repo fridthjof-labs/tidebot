@@ -106,10 +106,29 @@ describe('parsePlanChangeSummary', () => {
 })
 
 describe('formatApplyComment', () => {
-  it('names the branch it applied on', () => {
+  /**
+   * The workflow's name, not the plan section's heading. Composing this line
+   * from `heading` made the default read "Infrastructure plan apply success"
+   * and pushed repositories to rename their plan section to fix it.
+   */
+  it('names the workflow and the branch it applied on', () => {
     expect(formatApplyComment(PLAN, 'success', 'abcdef1234', 'trunk')).toBe(
-      '✅ Infrastructure plan apply **success** on `trunk` (`abcdef1`).',
+      '✅ Infrastructure apply **success** on `trunk` (`abcdef1`).',
     )
+  })
+
+  it('says how many apply jobs it left out rather than looking complete', () => {
+    const outputs = [{ name: 'OpenTofu / apply (a)', body: 'No changes.' }]
+
+    expect(
+      formatApplyComment(PLAN, 'success', 'abcdef1234', 'trunk', outputs, 3),
+    ).toMatch('_3 further apply jobs are not shown._')
+    expect(
+      formatApplyComment(PLAN, 'success', 'abcdef1234', 'trunk', outputs, 1),
+    ).toMatch('_1 further apply job is not shown._')
+    expect(
+      formatApplyComment(PLAN, 'success', 'abcdef1234', 'trunk', outputs, 0),
+    ).not.toMatch('not shown')
   })
 
   it('stays a single line when there is no output to show', () => {

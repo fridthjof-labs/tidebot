@@ -447,3 +447,59 @@ describe('preview build checks', () => {
     },
   )
 })
+
+describe('a pull request that is over', () => {
+  /**
+   * The comment is re-rendered by events that arrive after a merge, and under
+   * Actions latency the pull request can close between the event and the
+   * fetch. A merged pull request reported as blocked reads as a failure, and
+   * its blockers are artefacts: GitHub stops computing mergeability once a
+   * pull request closes.
+   */
+  const closedTide = decision({
+    ready: false,
+    blockers: [
+      { kind: 'not-open', state: 'closed' },
+      { kind: 'mergeable-state', state: 'unknown' },
+    ],
+  })
+
+  it('reports a merged pull request as merged', () => {
+    const body = formatPipelineSummary({
+      checkRuns: GREEN,
+      deployments: [],
+      tide: closedTide,
+      pr: pullRequest({ state: 'closed', merged: true }),
+      config: config(),
+    })
+
+    expect(body).toMatch('✅ Merged')
+    expect(body).not.toMatch('Not merging yet')
+    expect(body).not.toMatch('Blocking the merge')
+    expect(body).not.toMatch('mergeability')
+  })
+
+  it('distinguishes closed without merging', () => {
+    const body = formatPipelineSummary({
+      checkRuns: GREEN,
+      deployments: [],
+      tide: closedTide,
+      pr: pullRequest({ state: 'closed', merged: false }),
+      config: config(),
+    })
+
+    expect(body).toMatch('Closed without merging')
+    expect(body).not.toMatch('Blocking the merge')
+  })
+
+  it('says the same thing in the pull request body', () => {
+    const block = formatStatusBlock({
+      checkRuns: GREEN,
+      tide: closedTide,
+      pr: pullRequest({ state: 'closed', merged: true }),
+      config: config(),
+    })
+
+    expect(block).toMatch('**Tidebot — ✅ Merged**')
+  })
+})

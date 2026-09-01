@@ -64,19 +64,18 @@ async function postApplyComment(
   // it. Reporting only a conclusion means the one comment that says what
   // production actually changed says the least about it.
   const applyJobName = ctx.config.plan.applyJobName
-  const outputs = applyJobName
-    ? (
-        await downloadMatchingWorkflowJobLogs(
-          ctx.octokit,
-          ctx.ref,
-          workflowRun.id,
-          applyJobName,
-        )
-      ).flatMap((job) => {
-        const body = parsePlanLogFromJobLogs(job.logs, ctx.config.plan)
-        return body ? [{ name: job.name, body }] : []
-      })
-    : []
+  const applyLogs = applyJobName
+    ? await downloadMatchingWorkflowJobLogs(
+        ctx.octokit,
+        ctx.ref,
+        workflowRun.id,
+        applyJobName,
+      )
+    : { jobs: [], omitted: 0 }
+  const outputs = applyLogs.jobs.flatMap((job) => {
+    const body = parsePlanLogFromJobLogs(job.logs, ctx.config.plan)
+    return body ? [{ name: job.name, body }] : []
+  })
 
   const marker = applyMarker(workflowRun.head_sha)
   await upsertIssueCommentWithMarker(
@@ -90,6 +89,7 @@ async function postApplyComment(
       workflowRun.head_sha,
       ctx.defaultBranch,
       outputs,
+      applyLogs.omitted,
     )}\n\n${marker}`,
     ctx.identity.login,
   )

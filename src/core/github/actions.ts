@@ -55,8 +55,10 @@ export async function downloadWorkflowJobLogs(
   }
 }
 
-// ponytail: enough for a matrix that applies every root of a small estate;
-// past that the comment would be unreadable long before the cap bites.
+// Enough for a matrix that applies every root of a small estate; past that the
+// comment would be unreadable long before the cap bites. What is left out is
+// reported rather than dropped, because a matrix is sized by the repository
+// and can outgrow this without anyone changing Tidebot.
 const MAX_MATCHED_JOBS = 12
 
 /**
@@ -71,7 +73,7 @@ export async function downloadMatchingWorkflowJobLogs(
   ref: RepoRef,
   workflowRunId: number,
   jobNamePrefix: string,
-): Promise<Array<{ name: string; logs: string }>> {
+): Promise<{ jobs: Array<{ name: string; logs: string }>; omitted: number }> {
   try {
     const { data: jobs } = await octokit.rest.actions.listJobsForWorkflowRun({
       owner: ref.owner,
@@ -80,20 +82,23 @@ export async function downloadMatchingWorkflowJobLogs(
       per_page: 100,
     })
 
-    const matched = jobs.jobs
-      .filter((entry) => entry.name.startsWith(jobNamePrefix))
-      .slice(0, MAX_MATCHED_JOBS)
+    const matching = jobs.jobs.filter((entry) =>
+      entry.name.startsWith(jobNamePrefix),
+    )
 
     const collected: Array<{ name: string; logs: string }> = []
-    for (const job of matched) {
+    for (const job of matching.slice(0, MAX_MATCHED_JOBS)) {
       const logs = await downloadJobLog(octokit, ref, job.id)
       if (logs) {
         collected.push({ name: job.name, logs })
       }
     }
-    return collected
+    return {
+      jobs: collected,
+      omitted: Math.max(0, matching.length - MAX_MATCHED_JOBS),
+    }
   } catch {
-    return []
+    return { jobs: [], omitted: 0 }
   }
 }
 

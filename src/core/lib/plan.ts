@@ -168,12 +168,17 @@ export function formatApplyComment(
   headSha: string,
   branch: string,
   outputs: Array<{ name: string; body: string }> = [],
+  omittedJobs = 0,
 ): string {
   // GLYPH, not literals: the glyph vocabulary is the one place these
   // symbols are defined, so this comment reads the same as every other surface.
   const icon = conclusion === 'success' ? GLYPH.passed : GLYPH.failed
+  // The workflow's name, not the plan section's heading: this line is about
+  // the run that applied. Reusing `heading` made the default read
+  // "Infrastructure plan apply success" and forced a repository to rename its
+  // plan section to fix a sentence about the apply.
   const lines = [
-    `${icon} ${config.heading} apply **${conclusion}** on \`${branch}\` (\`${headSha.slice(0, 7)}\`).`,
+    `${icon} ${config.workflowName} apply **${conclusion}** on \`${branch}\` (\`${headSha.slice(0, 7)}\`).`,
   ]
 
   // One job needs no heading; a matrix does, or the sections are an unlabelled
@@ -191,6 +196,15 @@ export function formatApplyComment(
       lines.push(`**${output.name}**`, '')
     }
     lines.push(`${fence}${config.codeFence}`, truncated, fence)
+  }
+
+  // A matrix is sized by the repository, so it can outgrow the job cap without
+  // anyone changing Tidebot. Saying so beats a comment that looks complete.
+  if (omittedJobs > 0) {
+    lines.push(
+      '',
+      `_${omittedJobs} further apply ${omittedJobs === 1 ? 'job is' : 'jobs are'} not shown._`,
+    )
   }
 
   return lines.join('\n')
