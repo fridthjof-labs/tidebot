@@ -222,6 +222,7 @@ plan:
   workflowName: Infrastructure       # workflow_run.name
   workflowFile: infra.yml            # enables /plan
   planJobName: OpenTofu / plan
+  applyJobName: OpenTofu / apply     # optional; shows the apply's own output
   logBeginMarker: TIDEBOT_PLAN_LOG_BEGIN
   logEndMarker: TIDEBOT_PLAN_LOG_END
   actionsMarker: 'will perform the following actions:'
@@ -244,6 +245,23 @@ anything else that produces a plan-shaped diff.
 
 When the same workflow runs on a push to the default branch, Tidebot comments
 the apply result on the pull request whose merge commit triggered it.
+
+That comment is a one-line result unless `applyJobName` is set. With it,
+Tidebot reads the same markers out of the apply job and includes the output, so
+the comment that says production changed also says what changed:
+
+```yaml
+- run: |
+    echo TIDEBOT_PLAN_LOG_BEGIN
+    tofu apply -auto-approve -no-color
+    echo TIDEBOT_PLAN_LOG_END
+```
+
+`applyJobName` matches the start of a job name rather than the whole of it. A
+matrix job is named `<job> (<value>)`, so a prefix keeps a single job working
+and lets a fanned-out one report every leg, each labelled by the name that
+distinguishes it. Bodies are fenced, truncated and ANSI-stripped exactly as
+plan output is.
 
 ## `pipeline`
 

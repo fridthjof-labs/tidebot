@@ -1,5 +1,6 @@
 import type { BotContext } from '../context.js'
 import {
+  downloadMatchingWorkflowJobLogs,
   downloadWorkflowJobLogs,
   listRecentlyClosedPullRequests,
   upsertIssueCommentWithMarker,
@@ -59,6 +60,24 @@ async function postApplyComment(
     return
   }
 
+  // The apply's own output, when the repository names the job that carries
+  // it. Reporting only a conclusion means the one comment that says what
+  // production actually changed says the least about it.
+  const applyJobName = ctx.config.plan.applyJobName
+  const outputs = applyJobName
+    ? (
+        await downloadMatchingWorkflowJobLogs(
+          ctx.octokit,
+          ctx.ref,
+          workflowRun.id,
+          applyJobName,
+        )
+      ).flatMap((job) => {
+        const body = parsePlanLogFromJobLogs(job.logs, ctx.config.plan)
+        return body ? [{ name: job.name, body }] : []
+      })
+    : []
+
   const marker = applyMarker(workflowRun.head_sha)
   await upsertIssueCommentWithMarker(
     ctx.octokit,
@@ -70,6 +89,7 @@ async function postApplyComment(
       workflowRun.conclusion ?? 'unknown',
       workflowRun.head_sha,
       ctx.defaultBranch,
+      outputs,
     )}\n\n${marker}`,
     ctx.identity.login,
   )

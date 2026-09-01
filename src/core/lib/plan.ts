@@ -167,7 +167,31 @@ export function formatApplyComment(
   conclusion: string,
   headSha: string,
   branch: string,
+  outputs: Array<{ name: string; body: string }> = [],
 ): string {
+  // GLYPH, not literals: the glyph vocabulary is the one place these
+  // symbols are defined, so this comment reads the same as every other surface.
   const icon = conclusion === 'success' ? GLYPH.passed : GLYPH.failed
-  return `${icon} ${config.heading} apply **${conclusion}** on \`${branch}\` (\`${headSha.slice(0, 7)}\`).`
+  const lines = [
+    `${icon} ${config.heading} apply **${conclusion}** on \`${branch}\` (\`${headSha.slice(0, 7)}\`).`,
+  ]
+
+  // One job needs no heading; a matrix does, or the sections are an unlabelled
+  // wall of output with no way to tell which target each belongs to.
+  const labelled = outputs.length > 1
+  for (const output of outputs) {
+    const trimmed = trimPlanLogForComment(output.body, config)
+    const truncated =
+      trimmed.length > PLAN_BODY_MAX_LENGTH
+        ? `${trimmed.slice(0, PLAN_BODY_MAX_LENGTH)}\n\n... truncated ...`
+        : trimmed
+    const fence = fenceFor(truncated)
+    lines.push('')
+    if (labelled) {
+      lines.push(`**${output.name}**`, '')
+    }
+    lines.push(`${fence}${config.codeFence}`, truncated, fence)
+  }
+
+  return lines.join('\n')
 }
