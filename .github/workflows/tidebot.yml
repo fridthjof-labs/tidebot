@@ -52,8 +52,12 @@ jobs:
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
     # A local path, and `ref: main`: this repository dogfoods whatever is on
-    # its own default branch rather than the commit under test. No App secrets
-    # are passed, so the canonical identity is always github-actions[bot].
+    # its own default branch rather than the commit under test. The App is
+    # used only for branch updates, so CI re-runs on them; every visible
+    # action still comes from github-actions[bot].
     uses: ./.github/workflows/run.yml
+    secrets:
+      app_id: ${{ secrets.TIDEBOT_APP_ID }}
+      private_key: ${{ secrets.TIDEBOT_PRIVATE_KEY }}
     with:
       ref: main

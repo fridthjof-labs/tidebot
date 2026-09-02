@@ -11,6 +11,11 @@ plugins:
   autoApprove: true
   intake: true
 
+commands:
+  # A real rebase, signed by the committer identity in this repository's
+  # variables; docs/signed-rebase.md. Seeded by fridthjof-labs/infrastructure.
+  updateBranchMethod: signed-rebase
+
 tide:
   mergeMethod: squash
   requiredContexts:
