@@ -102,20 +102,30 @@ to all of them.
 - `minimumReleaseAge` keeps installs off packages published in the last week,
   which is where most npm account compromises are caught.
 
-### The reusable workflows are pinned, in two places
+### The reusable workflow is pinned once
 
-A caller workflow pins twice, and both must move together:
+`uses: …/run.yml@v0.3.0` selects the workflow file, and that workflow checks
+out the bot code at the same commit (`job.workflow_sha`), so the two cannot
+drift apart. Moving to a newer version is a one-line change you review, not
+something that happens to you — and Dependabot can open that change for you:
 
-- `uses: …/run.yml@v0.1.0` selects the **workflow file**.
-- `with: ref: v0.1.0` selects the **bot code** that workflow checks out.
-
-Pinning only the first still runs whatever is on this repository's default
-branch. `tidebot init` writes both. Moving to a newer version is a one-line
-change you review, not something that happens to you.
+```yaml
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+```
 
 Pin to a commit SHA rather than a tag if you want to defend against a tag being
 moved — a tag in this repository can be repointed by anyone who can push tags
-here.
+here. Dependabot keeps a SHA pin current too, and updates the version comment
+beside it.
+
+The optional `ref` input still overrides the checkout, for a repository that
+deliberately runs a branch. Passing it re-introduces a second pin to maintain.
 
 ## Rate limits as a safety property
 

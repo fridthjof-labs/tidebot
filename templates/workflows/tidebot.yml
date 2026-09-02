@@ -52,12 +52,11 @@ jobs:
        github.event.workflow_run.name != 'Tidebot') &&
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
-    # Two pins, and they must move together: `@vX.Y.Z` selects the workflow
-    # file, and `ref: vX.Y.Z` selects the bot code that workflow checks out.
-    # Pinning only the first would still run the default branch.
+    # One pin: the workflow checks out the bot code at the same commit it was
+    # resolved from. Dependabot bumps it on each release when this repository
+    # has a `github-actions` entry in `.github/dependabot.yml`; replace the tag
+    # with the release commit SHA to defend against a moved tag.
     uses: fridthjof-labs/tidebot/.github/workflows/run.yml@v0.3.0 # x-release-please-version
-    with:
-      ref: v0.3.0 # x-release-please-version
     secrets:
       # Optional: use an App token only for branch updates so CI re-runs.
       # All visible actions still come from github-actions[bot].
