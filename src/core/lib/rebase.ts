@@ -22,6 +22,7 @@ export async function updateBranch(
   pr: PullRequest,
   config: BotConfig,
   defaultBranch: string,
+  dispatchOctokit: Octokit = octokit,
 ): Promise<BranchUpdateResult> {
   const method = config.commands.updateBranchMethod
 
@@ -37,8 +38,12 @@ export async function updateBranch(
     }
   }
 
+  // The workflow is started with the bot's own token, not the push App's.
+  // workflow_dispatch is one of the two events GITHUB_TOKEN may trigger, and
+  // the App's job is the push inside the run; giving it Actions permission
+  // only to press the button would widen it for nothing.
   const result = await dispatchWorkflow(
-    octokit,
+    dispatchOctokit,
     ref,
     config.signedRebase.workflowFile,
     config.signedRebase.ref ?? defaultBranch,

@@ -95,7 +95,9 @@ commands:
 
 ## What happens on `/rebase`
 
-1. Tidebot dispatches `tidebot-rebase.yml` with the pull request number.
+1. Tidebot dispatches `tidebot-rebase.yml` with the pull request number,
+   using its own token: `workflow_dispatch` is one of the events
+   `GITHUB_TOKEN` may trigger, so the App needs no Actions permission.
 2. The job mints an App installation token, reads the head and base refs, and
    refuses immediately if the pull request comes from a fork.
 3. It imports the GPG key, sets the machine user as committer, and runs

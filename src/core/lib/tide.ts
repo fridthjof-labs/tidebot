@@ -29,6 +29,7 @@ export async function maybeRebaseIfBehind(
   pr: PullRequest,
   config: BotConfig,
   defaultBranch: string,
+  dispatchOctokit: Octokit = octokit,
 ): Promise<boolean> {
   if (!config.tide.autoRebaseWhenBehind) {
     return false
@@ -52,6 +53,7 @@ export async function maybeRebaseIfBehind(
     pr,
     config,
     defaultBranch,
+    dispatchOctokit,
   )
   return result.updated
 }
