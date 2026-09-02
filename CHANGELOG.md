@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/fridthjof-labs/tidebot/compare/v0.2.1...v0.3.0) (2026-09-02)
+
+
+### Features
+
+* **cli:** register any GitHub App from a manifest file ([#33](https://github.com/fridthjof-labs/tidebot/issues/33)) ([c69e5db](https://github.com/fridthjof-labs/tidebot/commit/c69e5dbfe0f531a531e51757471ae7ac59b9b09e))
+
+
+### Bug Fixes
+
+* **cli:** omit hook_attributes for an App with no webhook ([#35](https://github.com/fridthjof-labs/tidebot/issues/35)) ([a65bcaf](https://github.com/fridthjof-labs/tidebot/commit/a65bcaf7a379f3332458870dd56cb73c676dbf36))
+* **cli:** say the right thing after registering an App from a manifest ([#36](https://github.com/fridthjof-labs/tidebot/issues/36)) ([55c4522](https://github.com/fridthjof-labs/tidebot/commit/55c45227b6dff7938793b4491cf9ae17bd6fcf1a))
+
 ## [0.2.1](https://github.com/fridthjof-labs/tidebot/compare/v0.2.0...v0.2.1) (2026-09-01)
 
 

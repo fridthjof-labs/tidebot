@@ -1,6 +1,6 @@
 {
   "name": "@fridthjof-labs/tidebot",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Prow-inspired GitHub repository automation without Kubernetes: labels, slash commands, auto-approve, and Tide-style auto-merge.",
   "license": "MIT",
   "repository": {
