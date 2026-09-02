@@ -32,10 +32,12 @@ and lets the runner do the work.
 
 ## Setup
 
-### 1. Create the machine user
+### 1. Choose the committer account
 
-Create a GitHub account for the bot's committer identity and give it write
-access to the repositories that will use signed rebase. Use an email address
+Any user account with a verified email works, including your own: rebased
+commits then show you as committer and the original author as author. A
+machine user keeps the bot's rebases out of your name. Either way, give the
+account write access to the repositories that will use signed rebase. Use an email address
 you control; it must be **verified on that account**, because GitHub matches
 the signature's key to a user by the committer email.
 
