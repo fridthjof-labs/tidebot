@@ -13,6 +13,12 @@ on:
         required: true
         type: string
 
+# The reusable workflow cannot take more than its caller grants; this is what
+# a rebase and its failure comment need.
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   rebase:
     # Pinned: this job holds the App key and the signing key, so it must not
