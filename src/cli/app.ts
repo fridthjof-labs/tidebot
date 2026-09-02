@@ -119,7 +119,11 @@ export async function describeApp(app: App): Promise<{
   name: string
   events: string[]
   permissions: Record<string, string>
-  installations: Array<{ id: number; account: string; repositories: number }>
+  installations: Array<{
+    id: number
+    account: string
+    repositorySelection: 'all' | 'selected'
+  }>
 }> {
   const { data } = await app.octokit.request('GET /app')
   if (!data) {
@@ -144,7 +148,7 @@ export async function describeApp(app: App): Promise<{
         (installation.account && 'login' in installation.account
           ? installation.account.login
           : null) ?? 'unknown',
-      repositories: installation.repository_selection === 'all' ? -1 : 0,
+      repositorySelection: installation.repository_selection,
     })),
   }
 }
