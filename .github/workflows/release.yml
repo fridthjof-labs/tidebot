@@ -3,8 +3,14 @@ name: Release
 # Tidebot merges as github-actions[bot], and GitHub does not let a
 # GITHUB_TOKEN-authenticated push trigger another workflow's `push` event. A
 # Tidebot-merged release PR therefore leaves the tag uncut until the next human
-# push to main. Running again after Tidebot finishes on main closes that gap;
-# release-please is idempotent and no-ops when there is nothing to release.
+# push to main. Running again after Tidebot's own push run on main closes that
+# gap; release-please is idempotent and no-ops when there is nothing to release.
+#
+# release-please pushes its branch as the fridthjof-labs-tidebot App, not as
+# github-actions[bot]: since June 2026 GitHub holds every workflow run on a
+# pull request the default token created or updated until a maintainer
+# approves it, and no setting turns that off. An App push is not held and
+# triggers CI natively, so the release PR's checks run on their own.
 on:
   push:
     branches: [main]
@@ -27,6 +33,11 @@ concurrency:
 
 jobs:
   release-please:
+    # Tidebot runs on main for pushes and for every comment on the default
+    # branch; only the push run means main moved.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -36,9 +47,15 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app
+        with:
+          app-id: ${{ secrets.TIDEBOT_APP_ID }}
+          private-key: ${{ secrets.TIDEBOT_PRIVATE_KEY }}
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
+          token: ${{ steps.app.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
