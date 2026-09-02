@@ -88,6 +88,7 @@ async function executeCommentCommand(
       pull,
       ctx.config,
       ctx.defaultBranch,
+      ctx.octokit,
     )
     return { kind: 'rebase', updated: result.updated, message: result.message }
   }

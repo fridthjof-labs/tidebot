@@ -66,6 +66,25 @@ describe('updateBranch', () => {
     expect(createWorkflowDispatch).not.toHaveBeenCalled()
   })
 
+  it('starts the workflow with the dispatch client, not the push App', async () => {
+    // The push App has no Actions permission; the bot's own token dispatches.
+    const appDispatch = vi.fn().mockResolvedValue({})
+    const ownDispatch = vi.fn().mockResolvedValue({})
+    const result = await updateBranch(
+      { rest: { actions: { createWorkflowDispatch: appDispatch } } } as never,
+      REF,
+      7,
+      pullRequest(),
+      config({ commands: { updateBranchMethod: 'signed-rebase' } }),
+      'main',
+      { rest: { actions: { createWorkflowDispatch: ownDispatch } } } as never,
+    )
+
+    expect(result.updated).toBe(true)
+    expect(ownDispatch).toHaveBeenCalledTimes(1)
+    expect(appDispatch).not.toHaveBeenCalled()
+  })
+
   it('reports a missing workflow rather than claiming success', async () => {
     const createWorkflowDispatch = vi
       .fn()

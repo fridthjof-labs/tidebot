@@ -243,6 +243,7 @@ export async function handlePullRequest(
       pull,
       config,
       ctx.defaultBranch,
+      ctx.octokit,
     )
     if (!rebased) {
       await maybeAutoMerge(ctx, pullNumber, pull, { checkRuns, statuses })
@@ -324,6 +325,7 @@ export async function handleDefaultBranchPush(ctx: BotContext): Promise<void> {
       pull,
       ctx.config,
       ctx.defaultBranch,
+      ctx.octokit,
     )
   }
 }

@@ -53,6 +53,7 @@ async function tryUpdateDependabotBranch(
     pr,
     ctx.config,
     ctx.defaultBranch,
+    ctx.octokit,
   )
   return {
     updated: result.updated,
