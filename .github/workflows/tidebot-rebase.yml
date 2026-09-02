@@ -1,0 +1,30 @@
+# Signed rebase for `/rebase`, dispatched by Tidebot. This is the template in
+# templates/workflows/, with one change: the reusable workflow is referenced as
+# a local path, which is how a repository calls one of its own.
+#
+# Active once `commands.updateBranchMethod` is `signed-rebase` in
+# .github/tidebot.yaml. The secrets and variables it reads are seeded by
+# fridthjof-labs/infrastructure (infra/tidebot); setup is in
+# docs/signed-rebase.md.
+name: Tidebot rebase
+
+on:
+  workflow_dispatch:
+    inputs:
+      pull_number:
+        description: Pull request to rebase
+        required: true
+        type: string
+
+jobs:
+  rebase:
+    uses: ./.github/workflows/signed-rebase.yml
+    with:
+      pull_number: ${{ inputs.pull_number }}
+      git_user_name: ${{ vars.TIDEBOT_GIT_USER_NAME }}
+      git_user_email: ${{ vars.TIDEBOT_GIT_USER_EMAIL }}
+    secrets:
+      app_id: ${{ secrets.TIDEBOT_APP_ID }}
+      private_key: ${{ secrets.TIDEBOT_PRIVATE_KEY }}
+      gpg_private_key: ${{ secrets.TIDEBOT_GPG_PRIVATE_KEY }}
+      gpg_passphrase: ${{ secrets.TIDEBOT_GPG_PASSPHRASE }}
