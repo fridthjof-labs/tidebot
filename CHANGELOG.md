@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/fridthjof-labs/tidebot/compare/v0.3.0...v0.4.0) (2026-09-02)
+
+
+### Features
+
+* switch /rebase to signed rebase for this repository ([#47](https://github.com/fridthjof-labs/tidebot/issues/47)) ([cf13728](https://github.com/fridthjof-labs/tidebot/commit/cf13728cdfee37741f90617aa8a84cc1cabe46c5))
+
+
+### Bug Fixes
+
+* **cli:** report an installation's repository selection in app show ([#42](https://github.com/fridthjof-labs/tidebot/issues/42)) ([d32aba8](https://github.com/fridthjof-labs/tidebot/commit/d32aba8c4ac6dc60e48de8a6c8d13243b5871497))
+* **rebase:** start the signed-rebase workflow with the bot's own token ([#48](https://github.com/fridthjof-labs/tidebot/issues/48)) ([4c19b09](https://github.com/fridthjof-labs/tidebot/commit/4c19b09bad9a9da62c5c826712c49e7cde0a1b9c))
+
+
+### Documentation
+
+* the signing account can be your own ([#49](https://github.com/fridthjof-labs/tidebot/issues/49)) ([56493b5](https://github.com/fridthjof-labs/tidebot/commit/56493b5430e5e0d8e9f0b7e1b27d4631cc8325f3))
+
 ## [0.3.0](https://github.com/fridthjof-labs/tidebot/compare/v0.2.1...v0.3.0) (2026-09-02)
 
 
