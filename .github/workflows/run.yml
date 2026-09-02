@@ -10,10 +10,12 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: Tidebot version to run (tag, branch, or SHA)
+        description: >-
+          Tidebot version to run (tag, branch, or SHA). Defaults to the commit
+          of this workflow file, so the caller's `uses:` pin is the only pin.
         required: false
         type: string
-        default: main
+        default: ''
     secrets:
       app_id:
         description: Optional App ID used only for branch updates
@@ -38,7 +40,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: fridthjof-labs/tidebot
-          ref: ${{ inputs.ref }}
+          # `job.workflow_sha` is the commit this reusable workflow file was
+          # resolved from — the caller's `@<ref>` — so workflow and bot code
+          # cannot drift apart, and Dependabot's bump of `uses:` moves both.
+          ref: ${{ inputs.ref || job.workflow_sha }}
           path: .tidebot
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
