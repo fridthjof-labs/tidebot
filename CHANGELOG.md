@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/fridthjof-labs/tidebot/compare/v0.4.0...v0.4.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **tide:** resolve pull requests from the head commit on workflow_run ([#52](https://github.com/fridthjof-labs/tidebot/issues/52)) ([cb07d77](https://github.com/fridthjof-labs/tidebot/commit/cb07d7744dceee7429eb75dc438375ab18eb8608))
+
 ## [0.4.0](https://github.com/fridthjof-labs/tidebot/compare/v0.3.0...v0.4.0) (2026-09-02)
 
 
