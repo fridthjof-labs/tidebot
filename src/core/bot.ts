@@ -337,10 +337,28 @@ export async function handleWorkflowRun(
   if (ctx.configProblems.length > 0) {
     return
   }
-  await handleCheckEvent(
-    ctx,
-    (workflowRun.pull_requests ?? []).map((pull) => pull.number),
-  )
+  let pullNumbers = (workflowRun.pull_requests ?? []).map((pull) => pull.number)
+  if (pullNumbers.length === 0) {
+    // GitHub often leaves workflow_run.pull_requests empty -- reliably so when
+    // the head is a merge commit -- and Tide then evaluated nothing after green
+    // CI, so a pull request only merged on its next label change. Resolve the
+    // pull requests from the head commit rather than trusting the payload, and
+    // keep only the ones whose head is that commit: those are the checks that
+    // were actually evaluated.
+    const { data } =
+      await ctx.octokit.rest.repos.listPullRequestsAssociatedWithCommit({
+        owner: ctx.ref.owner,
+        repo: ctx.ref.repo,
+        commit_sha: workflowRun.head_sha,
+      })
+    pullNumbers = data
+      .filter(
+        (pull) =>
+          pull.state === 'open' && pull.head.sha === workflowRun.head_sha,
+      )
+      .map((pull) => pull.number)
+  }
+  await handleCheckEvent(ctx, pullNumbers)
   await handlePlanWorkflowRun(ctx, workflowRun)
   await handleDeployWorkflowRun(ctx, workflowRun)
 }

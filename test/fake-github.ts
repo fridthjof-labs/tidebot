@@ -364,6 +364,14 @@ export function fakeGitHub(initial: Partial<FakeGitHubState> = {}) {
       }
     }
 
+    if (rest[0] === 'commits' && rest[2] === 'pulls') {
+      return paged(
+        db.pulls
+          .filter((entry) => entry.head?.sha === rest[1])
+          .map(serialisePull),
+        url,
+      )
+    }
     if (rest[0] === 'commits' && rest[2] === 'check-runs') {
       return ok({ total_count: db.checkRuns.length, check_runs: db.checkRuns })
     }
