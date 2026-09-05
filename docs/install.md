@@ -6,7 +6,7 @@ The release pins Node and pnpm in `mise.toml`.
 
 <!-- x-release-please-start-version -->
 ```bash
-git clone --branch v0.4.1 --depth 1 https://github.com/fridthjof-labs/tidebot
+git clone --branch v0.4.2 --depth 1 https://github.com/fridthjof-labs/tidebot
 cd tidebot
 mise install
 mise exec -- pnpm install --frozen-lockfile

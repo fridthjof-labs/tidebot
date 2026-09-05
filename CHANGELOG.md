@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.2](https://github.com/fridthjof-labs/tidebot/compare/v0.4.1...v0.4.2) (2026-09-05)
+
+
+### Bug Fixes
+
+* make public Tidebot adoption reproducible ([#56](https://github.com/fridthjof-labs/tidebot/issues/56)) ([1f158e1](https://github.com/fridthjof-labs/tidebot/commit/1f158e12b41ae88161feca2103af4d5501e768ec))
+* **plan:** mention the merged pull request's author on the apply comment ([#54](https://github.com/fridthjof-labs/tidebot/issues/54)) ([d8d5c85](https://github.com/fridthjof-labs/tidebot/commit/d8d5c85e97e96873d3fa23c74c230af609cac446))
+* **tide:** stop treating mergeable_state=unstable as a merge blocker ([#55](https://github.com/fridthjof-labs/tidebot/issues/55)) ([6bfc0f4](https://github.com/fridthjof-labs/tidebot/commit/6bfc0f4da536526549858e609b42351b78cbb4a1))
+
 ## [0.4.1](https://github.com/fridthjof-labs/tidebot/compare/v0.4.0...v0.4.1) (2026-09-04)
 
 
