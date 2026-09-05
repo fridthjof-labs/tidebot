@@ -29,6 +29,26 @@ describe('evaluateTide', () => {
     expect(decision.ready).toBe(true)
   })
 
+  it('ignores unstable, which only restates the non-required checks', () => {
+    const decision = evaluateTide(
+      pullRequest({ ...READY, mergeable_state: 'unstable' }),
+      config({ tide: { requiredContexts: ['Quality / check'] } }).tide,
+      GREEN,
+      [],
+    )
+    expect(decision.ready).toBe(true)
+  })
+
+  it('still blocks on the other mergeable states', () => {
+    const decision = evaluateTide(
+      pullRequest({ ...READY, mergeable_state: 'blocked' }),
+      config({ tide: { requiredContexts: ['Quality / check'] } }).tide,
+      GREEN,
+      [],
+    )
+    expect(decision.reasons).toEqual(['mergeable_state=blocked'])
+  })
+
   it('names every blocker at once', () => {
     const decision = evaluateTide(
       pullRequest({ labels: [{ name: 'hold' }], draft: true }),
