@@ -90,6 +90,7 @@ async function postApplyComment(
       ctx.defaultBranch,
       outputs,
       applyLogs.omitted,
+      merged.authorLogin,
     )}\n\n${marker}`,
     ctx.identity.login,
   )

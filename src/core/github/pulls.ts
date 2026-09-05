@@ -111,17 +111,20 @@ export async function proposedDiffFingerprint(
 
 export type PullRequestSummary = {
   number: number
+  authorLogin: string | null
   mergedAt: string | null
   mergeCommitSha: string | null
 }
 
 function toSummary(pull: {
   number: number
+  user?: { login: string } | null
   merged_at?: string | null
   merge_commit_sha?: string | null
 }): PullRequestSummary {
   return {
     number: pull.number,
+    authorLogin: pull.user?.login ?? null,
     mergedAt: pull.merged_at ?? null,
     mergeCommitSha: pull.merge_commit_sha ?? null,
   }
