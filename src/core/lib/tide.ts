@@ -126,7 +126,15 @@ export function evaluateTide(
   if (pr.mergeable === false) {
     blockers.push({ kind: 'conflict' })
   }
-  if (pr.mergeable_state && pr.mergeable_state !== 'clean') {
+  // `unstable` only says a non-required check is pending or failing. Which
+  // checks matter is `requiredContexts`, judged below; and on Actions the
+  // bot's own in-flight check run makes every PR `unstable` at the moment it
+  // decides, with no event left to wake it once that run completes.
+  if (
+    pr.mergeable_state &&
+    pr.mergeable_state !== 'clean' &&
+    pr.mergeable_state !== 'unstable'
+  ) {
     blockers.push({ kind: 'mergeable-state', state: pr.mergeable_state })
   }
   if (!policy.autoMerge) {
