@@ -1,14 +1,18 @@
 # Installing Tidebot
 
-The CLI runs from a clone until the package is published:
+Install [mise](https://mise.jdx.dev/getting-started.html) and Git first. The
+GitHub release is the supported distribution; an npm package is not published.
+The release pins Node and pnpm in `mise.toml`.
 
+<!-- x-release-please-start-version -->
 ```bash
-git clone https://github.com/fridthjof-labs/tidebot && cd tidebot && pnpm install
-pnpm tidebot help
+git clone --branch v0.4.1 --depth 1 https://github.com/fridthjof-labs/tidebot
+cd tidebot
+mise install
+mise exec -- pnpm install --frozen-lockfile
+mise exec -- pnpm tidebot help
 ```
-
-Once it is published to npm, every `pnpm tidebot …` below becomes
-`npx @fridthjof-labs/tidebot …`.
+<!-- x-release-please-end -->
 
 Three paths, in increasing order of setup. They are not exclusive — a hosted
 instance can serve most repositories while an outlier runs itself in Actions —
@@ -17,7 +21,7 @@ but a single repository must use exactly one, or every action happens twice.
 ## 1. GitHub Actions (no hosted receiver)
 
 ```bash
-pnpm tidebot init --dir path/to/repo --actions --stale
+mise exec -- pnpm tidebot init --dir path/to/repo --actions --stale
 ```
 
 The generated workflow checks this repository out to get the bot's code, so
@@ -30,8 +34,8 @@ the labels it refers to. No App is needed for this — the CLI falls back to
 `GITHUB_TOKEN` so a repository can be set up before one exists:
 
 ```bash
-GITHUB_TOKEN=$(gh auth token) pnpm tidebot labels --repo my-org/my-repo
-GITHUB_TOKEN=$(gh auth token) pnpm tidebot doctor --repo my-org/my-repo
+GITHUB_TOKEN="$(gh auth token)" mise exec -- pnpm tidebot labels --repo my-org/my-repo
+GITHUB_TOKEN="$(gh auth token)" mise exec -- pnpm tidebot doctor --repo my-org/my-repo
 ```
 
 The generated workflow declares the permissions the bot needs. Many
@@ -51,7 +55,7 @@ would create a second Tidebot runtime and process every event twice.
 ## 2. Register the App
 
 ```bash
-pnpm tidebot app create \
+mise exec -- pnpm tidebot app create \
   --org my-org \
   --name tidebot \
   --webhook-url https://hooks.example.com/webhooks/github
@@ -99,48 +103,113 @@ on its own to exhaust the installation's hourly REST quota.
 
 ### Cloudflare Worker
 
+Use a Cloudflare account with Workers and Queues enabled, and a domain in a
+Cloudflare zone on that account. The repository's `wrangler.jsonc` and release
+workflow operate the maintainer's deployment. For your instance, create
+`wrangler.local.jsonc` in the clone's root with this complete configuration:
+
+<!-- consumer-worker:begin -->
+```json
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tidebot",
+  "main": "./src/runtime/worker.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "account_id": "REPLACE_WITH_YOUR_CLOUDFLARE_ACCOUNT_ID",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "hooks.example.com",
+      "custom_domain": true
+    }
+  ],
+  "exports": {
+    "WebhookDelivery": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TIDEBOT_WEBHOOK_DELIVERIES",
+        "class_name": "WebhookDelivery"
+      }
+    ]
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "TIDEBOT_WEBHOOK_QUEUE",
+        "queue": "tidebot-webhooks"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "tidebot-webhooks",
+        "max_batch_size": 10,
+        "max_batch_timeout": 1,
+        "max_retries": 10,
+        "retry_delay": 60,
+        "dead_letter_queue": "tidebot-webhooks-dlq"
+      }
+    ]
+  }
+}
+```
+<!-- consumer-worker:end -->
+
+Replace `REPLACE_WITH_YOUR_CLOUDFLARE_ACCOUNT_ID` with your account ID and
+`hooks.example.com` with your webhook hostname. If `tidebot` or the queue names
+are already used on that account, choose unique names and use them in the
+commands below too. Save this configuration in your own deployment repository
+so you can reuse it when upgrading; it contains no secrets.
+
+Authenticate and confirm the account before creating resources:
+
 ```bash
-pnpm install
-npx wrangler queues create tidebot-webhooks
-npx wrangler queues create tidebot-webhooks-dlq
-npx wrangler secret put TIDEBOT_APP_ID
-npx wrangler secret put TIDEBOT_PRIVATE_KEY
-npx wrangler secret put TIDEBOT_WEBHOOK_SECRET
-pnpm deploy:workers -- --env=""
+mise exec -- pnpm exec wrangler login
+mise exec -- pnpm exec wrangler whoami
+mise exec -- pnpm exec wrangler queues create tidebot-webhooks --config wrangler.local.jsonc
+mise exec -- pnpm exec wrangler queues create tidebot-webhooks-dlq --config wrangler.local.jsonc
+mise exec -- pnpm exec wrangler deploy --config wrangler.local.jsonc --dry-run
+mise exec -- pnpm exec wrangler deploy --config wrangler.local.jsonc
 ```
 
-That first deploy is the only manual one. Every release after it is deployed
-by the `deploy` job in `.github/workflows/release.yml`, which runs when
-release-please publishes a tag and deploys exactly that tag. It needs one
-repository secret, `CLOUDFLARE_API_TOKEN`, holding a token with Workers Scripts
-edit rights on the account in `wrangler.jsonc`. Without it the job fails, on
-purpose: a release that quietly did not deploy is harder to notice than a red
-job. To deploy a tag that already exists, run the workflow by hand with that tag:
+Set the credentials from the App registration using the interactive prompts:
 
 ```bash
-gh workflow run release.yml -f tag=v0.2.1
+mise exec -- pnpm exec wrangler secret put TIDEBOT_APP_ID --config wrangler.local.jsonc
+mise exec -- pnpm exec wrangler secret put TIDEBOT_PRIVATE_KEY --config wrangler.local.jsonc
+mise exec -- pnpm exec wrangler secret put TIDEBOT_WEBHOOK_SECRET --config wrangler.local.jsonc
 ```
 
-For the isolated preview environment, create `tidebot-webhooks-preview` and
-`tidebot-webhooks-preview-dlq`, set its secrets with `--env preview`, and deploy
-with `pnpm deploy:workers -- --env preview`. Preview is not deployed by the
-release job.
-
-Point the App's webhook URL at `https://<your-host>/webhooks/github`.
+Set the App's webhook URL to `https://hooks.example.com/webhooks/github`, using
+your hostname, and verify delivery in the App's **Advanced → Recent Deliveries**
+page. A successful webhook response confirms receipt; check the Worker logs and
+queue for processing failures, then run the per-repository `doctor` below.
 
 The Worker answers `GET /healthz` on its `workers.dev` route and nothing else
-there — webhooks are served only through the custom hostname, so the
-`workers.dev` URL cannot be used to reach the bot even if it is discovered.
-Restricting that hostname to GitHub's published webhook source ranges at the
-edge is worth doing and is not something this repository configures for you.
+there. Webhooks require the custom hostname; `workers.dev` is not a substitute.
 Keep the queue consumer and its dead-letter queue under alerting: a message only
 lands there after ten failed handler attempts.
+
+For upgrades, check out the desired release tag, install its locked dependencies,
+restore your configuration, and repeat the dry-run and deploy with
+`--config wrangler.local.jsonc`. Upstream releases do not deploy your instance.
+If you automate this in your own CI, use the same release pin and explicit config.
 
 ### Node
 
 ```bash
 export TIDEBOT_APP_ID=... TIDEBOT_PRIVATE_KEY="$(cat key.pem)" TIDEBOT_WEBHOOK_SECRET=...
-pnpm tidebot serve            # listens on $PORT, default 3000
+mise exec -- pnpm tidebot serve            # listens on $PORT, default 3000
 ```
 
 Expose `POST /webhooks/github` however you already expose things.
@@ -150,9 +219,9 @@ Expose `POST /webhooks/github` however you already expose things.
 Once the App is installed:
 
 ```bash
-pnpm tidebot init --dir path/to/repo   # writes .github/tidebot.yaml
-pnpm tidebot labels --repo my-org/my-repo
-pnpm tidebot doctor --repo my-org/my-repo
+mise exec -- pnpm tidebot init --dir path/to/repo   # writes .github/tidebot.yaml
+mise exec -- pnpm tidebot labels --repo my-org/my-repo
+mise exec -- pnpm tidebot doctor --repo my-org/my-repo
 ```
 
 `init` reads the repository: it proposes `area/` rules from the directory
@@ -166,7 +235,7 @@ re-describes labels that already exist; it never deletes one.
 
 ### Release workflows
 
-Tidebot merges as `github-actions[bot]`. GitHub does not let a `GITHUB_TOKEN`
+In the Actions runtime, Tidebot merges as `github-actions[bot]`. GitHub does not let a `GITHUB_TOKEN`
 push trigger another workflow's `push` event, so a workflow that only listens on
 `push: branches: [main]` will not run after Tidebot merges — a release PR merged
 this way leaves the tag uncut until someone pushes to `main` by hand.
@@ -201,5 +270,5 @@ rather than event-driven. Either add `.github/workflows/tidebot-stale.yml`
 (`tidebot init --stale`), or run it from wherever you run cron:
 
 ```bash
-pnpm tidebot stale-sweep --repo my-org/my-repo
+mise exec -- pnpm tidebot stale-sweep --repo my-org/my-repo
 ```

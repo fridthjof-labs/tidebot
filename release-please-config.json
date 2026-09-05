@@ -11,7 +11,9 @@
       "extra-files": [
         "templates/workflows/tidebot-rebase.yml",
         "templates/workflows/tidebot-stale.yml",
-        "templates/workflows/tidebot.yml"
+        "templates/workflows/tidebot.yml",
+        "README.md",
+        "docs/install.md"
       ],
       "changelog-sections": [
         { "type": "feat", "section": "Features" },
