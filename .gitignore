@@ -14,3 +14,6 @@ dist/
 tidebot-app.json
 tidebot-signing-key.*
 coverage/
+
+# Consumer deployment settings; keep a copy in your own deployment repository.
+wrangler.local.jsonc

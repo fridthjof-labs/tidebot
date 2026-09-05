@@ -18,21 +18,27 @@ Cloudflare Worker or Node process for several repositories.
 
 ## Install
 
-Requires Node 22+ and pnpm. Until the npm package is published, run the CLI
-from a clone:
+Install [mise](https://mise.jdx.dev/getting-started.html) and Git first. The
+GitHub release is the supported distribution; an npm package is not published.
+The release pins Node and pnpm in `mise.toml`.
 
+<!-- x-release-please-start-version -->
 ```bash
-git clone https://github.com/fridthjof-labs/tidebot && cd tidebot
-pnpm install
-pnpm tidebot init --dir ../my-repo --actions
+git clone --branch v0.4.1 --depth 1 https://github.com/fridthjof-labs/tidebot
+cd tidebot
+mise install
+mise exec -- pnpm install --frozen-lockfile
+mise exec -- pnpm tidebot init --dir ../my-repo --actions
 ```
+<!-- x-release-please-end -->
 
 This writes `.github/tidebot.yaml` and `.github/workflows/tidebot.yml` in the
-target repository. Create its labels and verify the installation:
+target repository. With an authenticated [GitHub CLI](https://cli.github.com/),
+create its labels and verify the installation:
 
 ```bash
-GITHUB_TOKEN="$(gh auth token)" pnpm tidebot labels --repo my-org/my-repo
-GITHUB_TOKEN="$(gh auth token)" pnpm tidebot doctor --repo my-org/my-repo
+GITHUB_TOKEN="$(gh auth token)" mise exec -- pnpm tidebot labels --repo my-org/my-repo
+GITHUB_TOKEN="$(gh auth token)" mise exec -- pnpm tidebot doctor --repo my-org/my-repo
 ```
 
 Commit the generated files. GitHub Actions is enough for one repository and
@@ -68,6 +74,16 @@ checks, and GitHub to report it mergeable.
 Tidebot also provides size and area labels, declarative auto-approval,
 Dependabot handling, stale pull-request sweeps, and one pipeline-status
 comment per pull request.
+
+## A real pull request
+
+In [Tidebot PR #52](https://github.com/fridthjof-labs/tidebot/pull/52), a
+maintainer posted [`/lgtm`](https://github.com/fridthjof-labs/tidebot/pull/52#issuecomment-5546033412)
+and [`/approve`](https://github.com/fridthjof-labs/tidebot/pull/52#issuecomment-5546033888).
+The [bot's final pipeline comment](https://github.com/fridthjof-labs/tidebot/pull/52#issuecomment-5546033452)
+shows the merged state, five green checks, and the approval labels. That same
+comment is updated as the pull request progresses, keeping the merge decision
+and its inputs in one place.
 
 ## Security
 

@@ -45,3 +45,14 @@ jobs:
         run: pnpm exec wrangler deploy --dry-run --env=""
       - name: Preview Worker bundles
         run: pnpm exec wrangler deploy --dry-run --env=preview
+      - name: Documented consumer Worker bundles
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const doc = readFileSync('docs/install.md', 'utf8')
+          const block = doc.split('<!-- consumer-worker:begin -->')[1].split('<!-- consumer-worker:end -->')[0]
+          const config = JSON.parse(block.split('```json\n')[1].split('```')[0])
+          config.account_id = '0'.repeat(32)
+          writeFileSync('wrangler.local.jsonc', JSON.stringify(config))
+          JS
+          pnpm exec wrangler deploy --config wrangler.local.jsonc --dry-run

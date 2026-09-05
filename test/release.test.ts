@@ -22,9 +22,11 @@ describe('release configuration', () => {
       'templates/workflows/tidebot-rebase.yml',
       'templates/workflows/tidebot-stale.yml',
       'templates/workflows/tidebot.yml',
+      'README.md',
+      'docs/install.md',
     ])
 
-    for (const template of templates) {
+    for (const template of templates.filter((path) => path.endsWith('.yml'))) {
       const pinLines = read(template)
         .split('\n')
         .filter((line) => /(?:@|ref:\s*)v\d+\.\d+\.\d+/.test(line))
@@ -34,6 +36,18 @@ describe('release configuration', () => {
         expect(line).toContain(version)
         expect(line).toContain('x-release-please-version')
       }
+    }
+  })
+
+  it('keeps documented installs pinned to the release', () => {
+    const version = `v${JSON.parse(read('package.json')).version}`
+    for (const path of ['README.md', 'docs/install.md']) {
+      const doc = read(path)
+      const install = doc
+        .split('<!-- x-release-please-start-version -->')[1]
+        .split('<!-- x-release-please-end -->')[0]
+      expect(install).toContain(`git clone --branch ${version} --depth 1`)
+      expect(install).toContain('pnpm install --frozen-lockfile')
     }
   })
 
