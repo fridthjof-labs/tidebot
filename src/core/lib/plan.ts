@@ -169,16 +169,21 @@ export function formatApplyComment(
   branch: string,
   outputs: Array<{ name: string; body: string }> = [],
   omittedJobs = 0,
+  authorLogin: string | null = null,
 ): string {
   // GLYPH, not literals: the glyph vocabulary is the one place these
   // symbols are defined, so this comment reads the same as every other surface.
   const icon = conclusion === 'success' ? GLYPH.passed : GLYPH.failed
+  // The pull request is already merged, so nobody is watching it. A mention
+  // is the only thing that makes a production apply, and above all a failed
+  // one, reach the person who landed it.
+  const mention = authorLogin ? `@${authorLogin} ` : ''
   // The workflow's name, not the plan section's heading: this line is about
   // the run that applied. Reusing `heading` made the default read
   // "Infrastructure plan apply success" and forced a repository to rename its
   // plan section to fix a sentence about the apply.
   const lines = [
-    `${icon} ${config.workflowName} apply **${conclusion}** on \`${branch}\` (\`${headSha.slice(0, 7)}\`).`,
+    `${mention}${icon} ${config.workflowName} apply **${conclusion}** on \`${branch}\` (\`${headSha.slice(0, 7)}\`).`,
   ]
 
   // One job needs no heading; a matrix does, or the sections are an unlabelled

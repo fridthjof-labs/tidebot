@@ -117,6 +117,17 @@ describe('formatApplyComment', () => {
     )
   })
 
+  /**
+   * The pull request is merged and closed by the time the apply reports, so
+   * nobody is watching it. The mention is what makes the result reach the
+   * person who landed the change.
+   */
+  it('mentions the author of the merged pull request', () => {
+    expect(
+      formatApplyComment(PLAN, 'failure', 'abcdef1234', 'trunk', [], 0, 'sdf'),
+    ).toBe('@sdf ❌ Infrastructure apply **failure** on `trunk` (`abcdef1`).')
+  })
+
   it('says how many apply jobs it left out rather than looking complete', () => {
     const outputs = [{ name: 'OpenTofu / apply (a)', body: 'No changes.' }]
 
