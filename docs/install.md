@@ -103,107 +103,52 @@ on its own to exhaust the installation's hourly REST quota.
 
 ### Cloudflare Worker
 
-Use a Cloudflare account with Workers and Queues enabled, and a domain in a
-Cloudflare zone on that account. The repository's `wrangler.jsonc` and release
-workflow operate the maintainer's deployment. For your instance, create
-`wrangler.local.jsonc` in the clone's root with this complete configuration:
+Use a Cloudflare account with Workers and Queues enabled. The repository's
+`wrangler.jsonc` deploys **any** instance: it pins no `account_id` and declares
+no `routes`, so you do not need a config of your own.
 
-<!-- consumer-worker:begin -->
-```json
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "tidebot",
-  "main": "./src/runtime/worker.ts",
-  "compatibility_date": "2026-08-01",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
-  "observability": {
-    "enabled": true
-  },
-  "account_id": "REPLACE_WITH_YOUR_CLOUDFLARE_ACCOUNT_ID",
-  "workers_dev": true,
-  "routes": [
-    {
-      "pattern": "hooks.example.com",
-      "custom_domain": true
-    }
-  ],
-  "exports": {
-    "WebhookDelivery": {
-      "type": "durable-object",
-      "storage": "sqlite"
-    }
-  },
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "TIDEBOT_WEBHOOK_DELIVERIES",
-        "class_name": "WebhookDelivery"
-      }
-    ]
-  },
-  "queues": {
-    "producers": [
-      {
-        "binding": "TIDEBOT_WEBHOOK_QUEUE",
-        "queue": "tidebot-webhooks"
-      }
-    ],
-    "consumers": [
-      {
-        "queue": "tidebot-webhooks",
-        "max_batch_size": 10,
-        "max_batch_timeout": 1,
-        "max_retries": 10,
-        "retry_delay": 60,
-        "dead_letter_queue": "tidebot-webhooks-dlq"
-      }
-    ]
-  }
-}
-```
-<!-- consumer-worker:end -->
-
-Replace `REPLACE_WITH_YOUR_CLOUDFLARE_ACCOUNT_ID` with your account ID and
-`hooks.example.com` with your webhook hostname. If `tidebot` or the queue names
-are already used on that account, choose unique names and use them in the
-commands below too. Save this configuration in your own deployment repository
-so you can reuse it when upgrading; it contains no secrets.
-
-Authenticate and confirm the account before creating resources:
+State the account, then deploy from a clone of the release tag:
 
 ```bash
-mise exec -- pnpm exec wrangler login
-mise exec -- pnpm exec wrangler whoami
-mise exec -- pnpm exec wrangler queues create tidebot-webhooks --config wrangler.local.jsonc
-mise exec -- pnpm exec wrangler queues create tidebot-webhooks-dlq --config wrangler.local.jsonc
-mise exec -- pnpm exec wrangler deploy --config wrangler.local.jsonc --dry-run
-mise exec -- pnpm exec wrangler deploy --config wrangler.local.jsonc
+export CLOUDFLARE_ACCOUNT_ID=<your 32-character account ID>
+export CLOUDFLARE_API_TOKEN=<a token scoped to that account>
+npx wrangler queues create tidebot-webhooks
+npx wrangler queues create tidebot-webhooks-dlq
+npx wrangler secret put TIDEBOT_APP_ID
+npx wrangler secret put TIDEBOT_PRIVATE_KEY
+npx wrangler secret put TIDEBOT_WEBHOOK_SECRET
+pnpm deploy:workers
 ```
 
-Set the credentials from the App registration using the interactive prompts:
+`CLOUDFLARE_ACCOUNT_ID` is required, not merely supported. This Worker holds a
+GitHub App private key, and a Cloudflare API token can reach more than one
+account, so the target is stated on purpose rather than inferred;
+`scripts/check-deploy-target.sh` stops a deploy that has not stated it.
 
-```bash
-mise exec -- pnpm exec wrangler secret put TIDEBOT_APP_ID --config wrangler.local.jsonc
-mise exec -- pnpm exec wrangler secret put TIDEBOT_PRIVATE_KEY --config wrangler.local.jsonc
-mise exec -- pnpm exec wrangler secret put TIDEBOT_WEBHOOK_SECRET --config wrangler.local.jsonc
-```
+Two things to change if you run more than one instance on a single Cloudflare
+account — the maintainer's deployment and yours, say. Worker and Queue names
+are account-scoped, so give yours its own: pass `--name your-tidebot` to
+`wrangler deploy`, and create and bind Queues under your own names. Two
+instances sharing a name do not coexist; the second one replaces the first.
 
-Set the App's webhook URL to `https://hooks.example.com/webhooks/github`, using
-your hostname, and verify delivery in the App's **Advanced → Recent Deliveries**
-page. A successful webhook response confirms receipt; check the Worker logs and
-queue for processing failures, then run the per-repository `doctor` below.
+Attach your webhook hostname as a **Custom Domain** on the Worker, through
+whatever declares your infrastructure. It is deliberately not in
+`wrangler.jsonc`: a route there would let each deploy reattach a hostname your
+OpenTofu or dashboard config believes it owns, and the two would fight over it.
+
+Set the App's webhook URL to `https://<your hostname>/webhooks/github` and
+verify delivery in the App's **Advanced → Recent Deliveries** page. A
+successful webhook response confirms receipt; check the Worker logs and queue
+for processing failures, then run the per-repository `doctor` below.
 
 The Worker answers `GET /healthz` on its `workers.dev` route and nothing else
 there. Webhooks require the custom hostname; `workers.dev` is not a substitute.
-Keep the queue consumer and its dead-letter queue under alerting: a message only
-lands there after ten failed handler attempts.
+Keep the queue consumer and its dead-letter queue under alerting: a message
+only lands there after ten failed handler attempts.
 
-For upgrades, check out the desired release tag, install its locked dependencies,
-restore your configuration, and repeat the dry-run and deploy with
-`--config wrangler.local.jsonc`. Upstream releases do not deploy your instance.
-If you automate this in your own CI, use the same release pin and explicit config.
+Upgrading is checking out the new release tag, installing its locked
+dependencies, and deploying again with the same `CLOUDFLARE_ACCOUNT_ID` and
+`--name`. Upstream releases deploy the maintainer's instance, never yours.
 
 ### Node
 

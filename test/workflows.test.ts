@@ -88,3 +88,37 @@ describe('release deploys the Worker', () => {
     expect(release).toMatch(/inputs\.tag != ''/)
   })
 })
+
+describe('worker config', () => {
+  const wrangler = readFileSync(
+    new URL('../wrangler.jsonc', import.meta.url),
+    'utf8',
+  )
+  const releaseWorkflow = readFileSync(
+    new URL('release.yml', WORKFLOW_DIR),
+    'utf8',
+  )
+
+  it('pins no account, so any organization can deploy its own instance', () => {
+    // A pinned account_id makes this file single-tenant: a second
+    // organization cannot deploy the shipped config at all, and ends up
+    // maintaining a divergent copy of every binding.
+    expect(wrangler).not.toMatch(/"account_id"/)
+  })
+
+  it('declares no routes, leaving Custom Domains to whoever owns the account', () => {
+    // A route here reattaches the hostname on every deploy, fighting whatever
+    // infrastructure config believes it owns that Custom Domain.
+    expect(wrangler).not.toMatch(/"routes"/)
+  })
+
+  it('still forces the deploy target to be stated', () => {
+    // Removing the pin removes a guard: this Worker holds a GitHub App private
+    // key, and a Cloudflare token can reach more than one account. The check
+    // script replaces the literal, and the release workflow has to run it.
+    expect(releaseWorkflow).toMatch(/scripts\/check-deploy-target\.sh/)
+    expect(releaseWorkflow).toMatch(
+      /CLOUDFLARE_ACCOUNT_ID:\s*\$\{\{\s*vars\.CLOUDFLARE_ACCOUNT_ID\s*\}\}/,
+    )
+  })
+})
