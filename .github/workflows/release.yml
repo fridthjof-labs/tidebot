@@ -84,6 +84,13 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # wrangler.jsonc pins no account, so the maintainer's deployment states
+      # its own here. An unset variable stops the deploy rather than letting a
+      # multi-account token choose: this Worker holds the App private key.
+      - run: bash scripts/check-deploy-target.sh
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       - run: pnpm exec wrangler deploy --env=""
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

@@ -5,18 +5,23 @@
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  // Pinned so a deploy cannot silently land in the wrong account: this key is
-  // reachable from more than one Cloudflare account, and a Worker holding the
-  // App private key must only ever exist in one of them.
-  "account_id": "9693f3d71030a9384e5fd9e528ab0e0b",
+  // No account_id and no routes, so this one config deploys any instance.
+  //
+  // The account comes from CLOUDFLARE_ACCOUNT_ID, checked by
+  // scripts/check-deploy-target.sh before every deploy. A pinned literal was
+  // the old guard against a multi-account API token landing the Worker -- and
+  // the App private key it holds -- in the wrong account. Requiring the
+  // variable guards the same thing without making this file single-tenant:
+  // the value is still explicit, and now it is explicit per deployment
+  // instead of per fork.
+  //
+  // Custom Domains belong to whatever declares the account's infrastructure.
+  // Declaring them here too would let a deploy reattach a hostname that an
+  // OpenTofu root believes it owns, and the two would fight over it.
+  //
   // workers.dev stays on for /healthz only; the fetch handler 404s every other
-  // path there. Webhooks arrive on the custom domains below, which are declared
-  // here rather than in the dashboard so a clean checkout reproduces production.
+  // path there.
   "workers_dev": true,
-  "routes": [
-    { "pattern": "tidebot.struktly.io", "custom_domain": true },
-    { "pattern": "tidebot.struktly.app", "custom_domain": true }
-  ],
   "exports": {
     "WebhookDelivery": {
       "type": "durable-object",
@@ -50,10 +55,6 @@
     "preview": {
       "name": "tidebot-preview",
       "workers_dev": true,
-      // Empty, not omitted: a named environment inherits top-level `routes`,
-      // so without this a preview deploy reassigns the production webhook
-      // domains to itself.
-      "routes": [],
       "durable_objects": {
         "bindings": [
           {

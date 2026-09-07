@@ -43,7 +43,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test:coverage",
     "tidebot": "tsx src/cli/index.ts",
     "serve": "tsx src/cli/index.ts serve",
-    "deploy:workers": "wrangler deploy",
+    "deploy:workers": "bash scripts/check-deploy-target.sh && wrangler deploy",
     "test:coverage": "vitest run --coverage",
     "types:workers": "wrangler types worker-configuration.d.ts --env-interface WorkerEnv --strict-vars=false --include-runtime=false --env-file .dev.vars.example",
     "types:workers:check": "pnpm types:workers --check"
