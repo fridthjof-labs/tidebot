@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/fridthjof-labs/tidebot/compare/v0.4.2...v0.5.0) (2026-09-07)
+
+
+### Features
+
+* **worker:** deploy any instance from the shipped wrangler config ([#59](https://github.com/fridthjof-labs/tidebot/issues/59)) ([c0fed59](https://github.com/fridthjof-labs/tidebot/commit/c0fed5962b30c553b1a15de843570d73ad0113c4))
+
 ## [0.4.2](https://github.com/fridthjof-labs/tidebot/compare/v0.4.1...v0.4.2) (2026-09-05)
 
 
