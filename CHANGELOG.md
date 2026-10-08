@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/fridthjof-labs/tidebot/compare/v0.5.1...v0.5.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **security:** silence untrusted commands and require complete approval paths ([#76](https://github.com/fridthjof-labs/tidebot/issues/76)) ([025fbf7](https://github.com/fridthjof-labs/tidebot/commit/025fbf7753eb0f0b05e81ed1704465f179b7d67f))
+
 ## [0.5.1](https://github.com/fridthjof-labs/tidebot/compare/v0.5.0...v0.5.1) (2026-10-08)
 
 
