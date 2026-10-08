@@ -173,7 +173,12 @@ export function formatApplyComment(
 ): string {
   // GLYPH, not literals: the glyph vocabulary is the one place these
   // symbols are defined, so this comment reads the same as every other surface.
-  const icon = conclusion === 'success' ? GLYPH.passed : GLYPH.failed
+  const icon =
+    conclusion === 'success'
+      ? GLYPH.passed
+      : conclusion === 'skipped'
+        ? GLYPH.skipped
+        : GLYPH.failed
   // The pull request is already merged, so nobody is watching it. A mention
   // is the only thing that makes a production apply, and above all a failed
   // one, reach the person who landed it.

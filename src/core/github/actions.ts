@@ -73,7 +73,11 @@ export async function downloadMatchingWorkflowJobLogs(
   ref: RepoRef,
   workflowRunId: number,
   jobNamePrefix: string,
-): Promise<{ jobs: Array<{ name: string; logs: string }>; omitted: number }> {
+): Promise<{
+  jobs: Array<{ name: string; logs: string }>
+  omitted: number
+  ran: number | null
+}> {
   try {
     const { data: jobs } = await octokit.rest.actions.listJobsForWorkflowRun({
       owner: ref.owner,
@@ -82,12 +86,15 @@ export async function downloadMatchingWorkflowJobLogs(
       per_page: 100,
     })
 
-    const matching = jobs.jobs.filter((entry) =>
-      entry.name.startsWith(jobNamePrefix),
+    // A skipped job has no log, and requesting one throws: only jobs that ran
+    // are read, and how many ran is what tells a real apply from none.
+    const ran = jobs.jobs.filter(
+      (entry) =>
+        entry.name.startsWith(jobNamePrefix) && entry.conclusion !== 'skipped',
     )
 
     const collected: Array<{ name: string; logs: string }> = []
-    for (const job of matching.slice(0, MAX_MATCHED_JOBS)) {
+    for (const job of ran.slice(0, MAX_MATCHED_JOBS)) {
       const logs = await downloadJobLog(octokit, ref, job.id)
       if (logs) {
         collected.push({ name: job.name, logs })
@@ -95,10 +102,11 @@ export async function downloadMatchingWorkflowJobLogs(
     }
     return {
       jobs: collected,
-      omitted: Math.max(0, matching.length - MAX_MATCHED_JOBS),
+      omitted: Math.max(0, ran.length - MAX_MATCHED_JOBS),
+      ran: ran.length,
     }
   } catch {
-    return { jobs: [], omitted: 0 }
+    return { jobs: [], omitted: 0, ran: null }
   }
 }
 
