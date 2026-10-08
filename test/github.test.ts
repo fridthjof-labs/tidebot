@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  downloadMatchingWorkflowJobLogs,
   downloadWorkflowJobLogs,
   getChecksForRef,
   submitPullRequestApproval,
@@ -54,6 +55,33 @@ describe('downloadWorkflowJobLogs', () => {
       downloadWorkflowJobLogs(octokit, REF, 1, 'plan'),
     ).resolves.toBeNull()
     vi.unstubAllGlobals()
+  })
+})
+
+describe('downloadMatchingWorkflowJobLogs', () => {
+  it('counts only matching jobs that ran', async () => {
+    const octokit = {
+      rest: {
+        actions: {
+          listJobsForWorkflowRun: vi.fn(async () => ({
+            data: {
+              jobs: [
+                { id: 1, name: 'validate', conclusion: 'success' },
+                { id: 2, name: 'apply (cloudflare)', conclusion: 'skipped' },
+                { id: 3, name: 'apply (github)', conclusion: 'skipped' },
+              ],
+            },
+          })),
+        },
+      },
+      request: vi.fn(async () => {
+        throw new Error('no log for a skipped job')
+      }),
+    } as never
+
+    await expect(
+      downloadMatchingWorkflowJobLogs(octokit, REF, 1, 'apply'),
+    ).resolves.toEqual({ jobs: [], omitted: 0, ran: 0 })
   })
 })
 

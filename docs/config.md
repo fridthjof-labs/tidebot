@@ -248,7 +248,9 @@ the apply result on the pull request whose merge commit triggered it.
 
 That comment is a one-line result unless `applyJobName` is set. With it,
 Tidebot reads the same markers out of the apply job and includes the output, so
-the comment that says production changed also says what changed:
+the comment that says production changed also says what changed. It also
+reports an apply whose matching jobs were all skipped as **skipped** rather than
+the run's conclusion, which is green when nothing was applied:
 
 ```yaml
 - run: |

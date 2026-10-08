@@ -71,7 +71,7 @@ async function postApplyComment(
         workflowRun.id,
         applyJobName,
       )
-    : { jobs: [], omitted: 0 }
+    : { jobs: [], omitted: 0, ran: null }
   const outputs = applyLogs.jobs.flatMap((job) => {
     const body = parsePlanLogFromJobLogs(job.logs, ctx.config.plan)
     return body ? [{ name: job.name, body }] : []
@@ -85,7 +85,9 @@ async function postApplyComment(
     marker,
     `${formatApplyComment(
       ctx.config.plan,
-      workflowRun.conclusion ?? 'unknown',
+      // A green run whose apply job was skipped changed nothing. Reporting
+      // the run's conclusion announced an apply that never happened.
+      applyLogs.ran === 0 ? 'skipped' : (workflowRun.conclusion ?? 'unknown'),
       workflowRun.head_sha,
       ctx.defaultBranch,
       outputs,

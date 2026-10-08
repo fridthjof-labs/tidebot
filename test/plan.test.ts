@@ -117,6 +117,12 @@ describe('formatApplyComment', () => {
     )
   })
 
+  it('marks an apply that never ran as skipped, not failed', () => {
+    expect(formatApplyComment(PLAN, 'skipped', 'abcdef1234', 'trunk')).toBe(
+      '⏭ Infrastructure apply **skipped** on `trunk` (`abcdef1`).',
+    )
+  })
+
   /**
    * The pull request is merged and closed by the time the apply reports, so
    * nobody is watching it. The mention is what makes the result reach the
