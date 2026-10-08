@@ -111,7 +111,9 @@ describe('handlePullRequest', () => {
   })
 
   it('merges when the labels and required checks are satisfied', async () => {
-    const pr = pullRequest({ labels: [{ name: 'lgtm' }, { name: 'approved' }] })
+    const pr = pullRequest({
+      labels: [{ name: 'lgtm' }, { name: 'approved' }],
+    })
     const state: FakeState = {
       pr,
       labels: ['lgtm', 'approved'],
@@ -142,7 +144,9 @@ describe('handlePullRequest', () => {
   it('merges only the commit whose checks it evaluated', async () => {
     // Without `sha`, a push landing between the check evaluation and the merge
     // call would merge code nobody reviewed. GitHub returns 409 instead.
-    const pr = pullRequest({ labels: [{ name: 'lgtm' }, { name: 'approved' }] })
+    const pr = pullRequest({
+      labels: [{ name: 'lgtm' }, { name: 'approved' }],
+    })
     const state: FakeState = {
       pr,
       labels: ['lgtm', 'approved'],
@@ -167,7 +171,9 @@ describe('handlePullRequest', () => {
   })
 
   it('does nothing but explain itself when the config did not resolve', async () => {
-    const pr = pullRequest({ labels: [{ name: 'lgtm' }, { name: 'approved' }] })
+    const pr = pullRequest({
+      labels: [{ name: 'lgtm' }, { name: 'approved' }],
+    })
     const state: FakeState = {
       pr,
       labels: ['lgtm', 'approved'],
@@ -241,6 +247,7 @@ describe('handlePullRequest', () => {
       {
         body: '/bug broken intake',
         issueNumber: 7,
+        authorAssociation: 'MEMBER',
         userLogin: 'reporter',
       },
     )
@@ -248,6 +255,44 @@ describe('handlePullRequest', () => {
     expect(addLabels).not.toHaveBeenCalled()
     expect(createComment).toHaveBeenCalledTimes(1)
   })
+
+  it.each([handleIssueComment, handleIssueIntakeComment])(
+    'keeps untrusted comments silent even when configuration is invalid',
+    async (handleComment) => {
+      const { octokit, spy } = fakeGitHub()
+      vi.spyOn(
+        octokit.rest.repos,
+        'getCollaboratorPermissionLevel',
+      ).mockResolvedValue({
+        data: { permission: 'read' },
+      } as never)
+      const ctx = context({
+        octokit,
+        configProblems: ['invalid repository config'],
+      })
+
+      for (const body of [
+        '/help',
+        '/hold',
+        '/bug broken intake',
+        'ordinary prose',
+      ]) {
+        await handleComment(ctx, {
+          body,
+          issueNumber: 42,
+          commentId: 123,
+          authorAssociation: 'NONE',
+          userLogin: 'outsider',
+        })
+      }
+
+      expect(spy.createComment).not.toHaveBeenCalled()
+      expect(spy.updateComment).not.toHaveBeenCalled()
+      expect(spy.deleteComment).not.toHaveBeenCalled()
+      expect(spy.addLabels).not.toHaveBeenCalled()
+      expect(spy.createReview).not.toHaveBeenCalled()
+    },
+  )
 
   it('refuses push and workflow automation when the config did not resolve', async () => {
     const list = vi.fn()
@@ -273,7 +318,9 @@ describe('handlePullRequest', () => {
   })
 
   it('resolves the pull requests from the head commit when the payload lists none', async () => {
-    const pr = pullRequest({ labels: [{ name: 'lgtm' }, { name: 'approved' }] })
+    const pr = pullRequest({
+      labels: [{ name: 'lgtm' }, { name: 'approved' }],
+    })
     const state: FakeState = {
       pr,
       labels: ['lgtm', 'approved'],
@@ -302,7 +349,9 @@ describe('handlePullRequest', () => {
   })
 
   it('re-evaluates associated pull requests after a workflow completes', async () => {
-    const pr = pullRequest({ labels: [{ name: 'lgtm' }, { name: 'approved' }] })
+    const pr = pullRequest({
+      labels: [{ name: 'lgtm' }, { name: 'approved' }],
+    })
     const state: FakeState = {
       pr,
       labels: ['lgtm', 'approved'],
@@ -331,7 +380,9 @@ describe('handlePullRequest', () => {
   })
 
   it('does not merge while a required check is red', async () => {
-    const pr = pullRequest({ labels: [{ name: 'lgtm' }, { name: 'approved' }] })
+    const pr = pullRequest({
+      labels: [{ name: 'lgtm' }, { name: 'approved' }],
+    })
     const state: FakeState = {
       pr,
       labels: ['lgtm', 'approved'],

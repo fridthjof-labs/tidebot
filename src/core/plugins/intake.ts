@@ -28,6 +28,17 @@ export async function handleIssueIntake(
   }
 
   const body = comment.body?.trim() ?? ''
+  const command = parseIntakeCommand(body)
+  if (body !== '/help' && !command) {
+    return false
+  }
+
+  // Plain issues have the same trust boundary as PR commands. Stay silent
+  // for untrusted callers rather than spending quota on help or denial posts.
+  if (!(await isTrusted(ctx, comment))) {
+    return false
+  }
+
   if (body === '/help') {
     await commentOnIssue(
       ctx.octokit,
@@ -37,21 +48,7 @@ export async function handleIssueIntake(
     )
     return true
   }
-
-  const command = parseIntakeCommand(body)
-  if (!command) {
-    return false
-  }
-
-  if (!(await isTrusted(ctx, comment))) {
-    await commentOnIssue(
-      ctx.octokit,
-      ctx.ref,
-      comment.issueNumber,
-      `@${comment.userLogin ?? 'unknown'} must be a repository collaborator to generate an issue.`,
-    )
-    return true
-  }
+  if (!command) return false
 
   if (!comment.commentId) {
     throw new Error('Issue intake requires a comment ID')

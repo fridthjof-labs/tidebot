@@ -23,7 +23,7 @@ export async function maybeAutoApprove(
   preloaded?: {
     checkRuns: CheckRun[]
     statuses: Status[]
-    changedPaths: string[]
+    changedPaths: string[] | null
   },
 ): Promise<void> {
   if (
@@ -42,6 +42,8 @@ export async function maybeAutoApprove(
         getChecksForRef(ctx.octokit, ctx.ref, pr.head.sha),
         getPullRequestChangedPaths(ctx.octokit, ctx.ref, pullNumber),
       ])
+
+  if (changedPaths === null) return
 
   const decision = evaluateAutoApprove({
     pr,

@@ -19,6 +19,7 @@ import { applyAreaLabels } from './plugins/area-labeler.js'
 import { maybeAutoApprove } from './plugins/auto-approve.js'
 import {
   handleIssueCommentCommand,
+  isTrusted,
   replyWithCommandHelp,
 } from './plugins/commands.js'
 import { maybeAutoApproveDependabot } from './plugins/dependabot.js'
@@ -205,7 +206,7 @@ export async function handlePullRequest(
 
   let checkRuns: CheckRun[] | undefined
   let statuses: Status[] | undefined
-  let changedPaths: string[] | undefined
+  let changedPaths: string[] | null | undefined
 
   if (needsPaths) {
     changedPaths = await getPullRequestChangedPaths(
@@ -261,6 +262,10 @@ export async function handleIssueComment(
     return
   }
 
+  if (ctx.configProblems.length > 0 && !(await isTrusted(ctx, comment))) {
+    return
+  }
+
   if (await reportConfigProblems(ctx, comment.issueNumber)) {
     return
   }
@@ -277,6 +282,9 @@ export async function handleIssueIntakeComment(
   comment: CommentContext,
 ): Promise<void> {
   if (isBotComment(comment.userLogin)) {
+    return
+  }
+  if (ctx.configProblems.length > 0 && !(await isTrusted(ctx, comment))) {
     return
   }
   if (await reportConfigProblems(ctx, comment.issueNumber)) {

@@ -148,7 +148,7 @@ export async function maybeAutoApproveDependabot(
   preloaded?: {
     checkRuns: CheckRun[]
     statuses: Status[]
-    changedPaths: string[]
+    changedPaths: string[] | null
   },
 ): Promise<void> {
   if (!ctx.config.plugins.dependabot || !isDependabotAuthor(pr.userLogin)) {
@@ -164,6 +164,8 @@ export async function maybeAutoApproveDependabot(
         getChecksForRef(ctx.octokit, ctx.ref, pr.head.sha),
         getPullRequestChangedPaths(ctx.octokit, ctx.ref, pullNumber),
       ])
+
+  if (changedPaths === null) return
 
   const safety = evaluateDependabotSafety(
     pr,

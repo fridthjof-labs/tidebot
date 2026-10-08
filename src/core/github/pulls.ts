@@ -44,8 +44,9 @@ export async function getPullRequestChangedPaths(
   octokit: Octokit,
   { owner, repo }: RepoRef,
   pullNumber: number,
-): Promise<string[]> {
-  const paths: string[] = []
+): Promise<string[] | null> {
+  const paths = new Set<string>()
+  let fileCount = 0
   const iterator = octokit.paginate.iterator(octokit.rest.pulls.listFiles, {
     owner,
     repo,
@@ -55,11 +56,18 @@ export async function getPullRequestChangedPaths(
 
   for await (const { data: files } of iterator) {
     for (const file of files) {
-      paths.push(file.filename)
+      // GitHub caps this listing at 3000 entries. A prefix cannot prove a
+      // path-based approval safe, even when every returned path matches.
+      if (++fileCount >= 3000) return null
+      paths.add(file.filename)
+      if (file.status === 'renamed') {
+        if (!file.previous_filename) return null
+        paths.add(file.previous_filename)
+      }
     }
   }
 
-  return paths
+  return [...paths]
 }
 
 /** GitHub returns at most this many files from a comparison. */
