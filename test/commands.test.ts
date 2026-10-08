@@ -126,6 +126,41 @@ describe('isBotComment', () => {
 })
 
 describe('command trust', () => {
+  it('silently rejects repeated untrusted commands without scanning or writing the thread', async () => {
+    const { octokit, requests, spy, db } = fakeGitHub({
+      comments: Array.from({ length: 250 }, (_, id) => ({
+        id,
+        body: 'Existing discussion',
+        user: { login: 'reader' },
+      })),
+    })
+    const permission = vi
+      .spyOn(octokit.rest.repos, 'getCollaboratorPermissionLevel')
+      .mockResolvedValue({ data: { permission: 'read' } } as never)
+    for (const [index, body] of [
+      '/approve',
+      '/hold',
+      '/plan',
+      '/lgtm cancel',
+    ].entries()) {
+      expect(
+        await handleIssueCommentCommand(context({ octokit }), {
+          body,
+          commentId: 1000 + index,
+          issueNumber: 42,
+          authorAssociation: 'NONE',
+          userLogin: 'drive-by',
+        }),
+      ).toBe(false)
+    }
+    expect(permission).toHaveBeenCalledTimes(4)
+    expect(requests).toEqual([])
+    expect(spy.createComment).not.toHaveBeenCalled()
+    expect(spy.updateComment).not.toHaveBeenCalled()
+    expect(db.comments).toHaveLength(250)
+    expect(db.labels).toEqual({})
+  })
+
   it('verifies write access when a webhook reports a collaborator as a contributor', async () => {
     const getCollaboratorPermissionLevel = vi.fn(async () => ({
       data: { permission: 'admin' },

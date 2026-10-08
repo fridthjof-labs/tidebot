@@ -279,11 +279,8 @@ export async function handleIssueCommentCommand(
   }
 
   if (!(await isTrusted(ctx, comment))) {
-    await replyToComment(
-      ctx,
-      comment,
-      `@${comment.userLogin ?? 'unknown'} must be a repository collaborator to run commands.`,
-    )
+    // A public commenter must not spend the installation's shared quota on
+    // denial replies, which paginate the entire thread before posting.
     return false
   }
 

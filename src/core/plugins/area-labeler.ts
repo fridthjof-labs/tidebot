@@ -16,6 +16,8 @@ export async function applyAreaLabels(
     getPullRequestLabels(ctx.octokit, ctx.ref, pullNumber),
   ])
 
+  if (paths === null) return
+
   const desired = areaLabelsForPaths(paths, ctx.config.area.rules)
   await syncLabels(ctx.octokit, ctx.ref, pullNumber, currentLabels, desired, [
     ctx.config.area.labelPrefix,

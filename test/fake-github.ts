@@ -64,6 +64,11 @@ export type FakeGitHubState = {
   checkRuns: FakeCheckRun[]
   statuses: Array<{ context: string; state: string; created_at: string }>
   changedPaths: string[]
+  changedFiles: Array<{
+    filename: string
+    status?: string
+    previous_filename?: string
+  }> | null
   pulls: FakePullRequest[]
   /** Labels that exist in the repository itself. */
   repositoryLabels: FakeRepositoryLabel[]
@@ -89,6 +94,7 @@ export function state(
     checkRuns: [],
     statuses: [],
     changedPaths: [],
+    changedFiles: null,
     pulls: [],
     repositoryLabels: [],
     contents: {},
@@ -336,7 +342,7 @@ export function fakeGitHub(initial: Partial<FakeGitHubState> = {}) {
       }
       if (rest[2] === 'files') {
         return paged(
-          db.changedPaths.map((filename) => ({ filename })),
+          db.changedFiles ?? db.changedPaths.map((filename) => ({ filename })),
           url,
         )
       }

@@ -312,12 +312,29 @@ describe('issue intake', () => {
   })
 
   it('refuses an untrusted author', async () => {
-    const { octokit, create } = octokitFor()
-    await handleIssueIntake(context({ octokit }), {
-      ...comment,
-      authorAssociation: 'NONE',
-    })
+    const { octokit, create, createComment } = octokitFor()
+    for (const body of ['/help', '/bug a failure', '/feature a request']) {
+      expect(
+        await handleIssueIntake(context({ octokit }), {
+          ...comment,
+          body,
+          authorAssociation: 'NONE',
+        }),
+      ).toBe(false)
+    }
     expect(create).not.toHaveBeenCalled()
+    expect(createComment).not.toHaveBeenCalled()
+  })
+
+  it('still answers a trusted plain-issue help request', async () => {
+    const { octokit, createComment } = octokitFor()
+    expect(
+      await handleIssueIntake(context({ octokit }), {
+        ...comment,
+        body: '/help',
+      }),
+    ).toBe(true)
+    expect(createComment).toHaveBeenCalledOnce()
   })
 
   it('ignores a comment that is not an intake command', async () => {
