@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/fridthjof-labs/tidebot/compare/v0.5.0...v0.5.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **plan:** report a skipped apply as skipped, not success ([#74](https://github.com/fridthjof-labs/tidebot/issues/74)) ([b211601](https://github.com/fridthjof-labs/tidebot/commit/b211601484a0d3679f78752ead3efc18df4cfaac))
+
 ## [0.5.0](https://github.com/fridthjof-labs/tidebot/compare/v0.4.2...v0.5.0) (2026-09-07)
 
 
