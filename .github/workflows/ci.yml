@@ -34,8 +34,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # A known-vulnerable dependency in a bot with write access to thirteen
-      # repositories is not a "fix it next sprint" problem.
       - run: pnpm audit --prod
       - run: pnpm lint
       - run: pnpm typecheck
@@ -45,9 +43,7 @@ jobs:
         run: pnpm exec wrangler deploy --dry-run --env=""
       - name: Preview Worker bundles
         run: pnpm exec wrangler deploy --dry-run --env=preview
-      # A second organization deploys the shipped config under its own Worker
-      # name with no account pinned. Prove that bundles, and prove the deploy
-      # check refuses to run without an account stated.
+      # Check that another instance can bundle and an unset deploy account fails.
       - name: Second-instance Worker bundle
         run: |
           pnpm exec wrangler deploy --dry-run --env="" --name tidebot-elsewhere
