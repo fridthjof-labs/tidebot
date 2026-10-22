@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/fridthjof-labs/tidebot/compare/v0.5.2...v0.5.3) (2026-10-22)
+
+
+### Documentation
+
+* simplify public project documentation ([#86](https://github.com/fridthjof-labs/tidebot/issues/86)) ([ced4c57](https://github.com/fridthjof-labs/tidebot/commit/ced4c578f449e1a4cafc70230eebce0c965d547a))
+
 ## [0.5.2](https://github.com/fridthjof-labs/tidebot/compare/v0.5.1...v0.5.2) (2026-10-21)
 
 
