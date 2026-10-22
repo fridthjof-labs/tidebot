@@ -50,7 +50,9 @@ See the [security model](docs/security.md) for the reasoning and
 
 [Release Please](https://github.com/googleapis/release-please) prepares the version,
 changelog, tag, and GitHub Release from Conventional Commit subjects. Before 1.0,
-a breaking change bumps the minor version.
+a breaking change bumps the minor version. Ordinary `docs:` commits do not
+open a release PR or appear in release notes. Use `fix:`, `feat:`, or `perf:`
+for changes that should ship; an explicit breaking change remains releasable.
 
 The templates in `templates/workflows/` pin both the reusable workflow's `uses:`
 reference and its `with: ref:` checkout reference. Update both when releasing;
