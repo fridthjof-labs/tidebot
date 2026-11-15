@@ -8,7 +8,11 @@ import {
   updatePullRequestBody,
   upsertIssueCommentWithMarker,
 } from '../github.js'
-import { PIPELINE_COMMENT_MARKER } from '../lib/markers.js'
+import {
+  PIPELINE_COMMENT_MARKER,
+  type PullRequestDelivery,
+  readPullRequestDelivery,
+} from '../lib/markers.js'
 import {
   extractPlanSection,
   formatPipelineSummary,
@@ -30,7 +34,10 @@ export type WorkflowRunPayload = {
 export async function upsertPipelineSummaryComment(
   ctx: BotContext,
   pullNumber: number,
-  options?: { planSection?: string | null },
+  options?: {
+    planSection?: string | null
+    deliveryReceipt?: PullRequestDelivery
+  },
 ): Promise<void> {
   if (!ctx.config.plugins.commands) {
     return
@@ -46,6 +53,13 @@ export async function upsertPipelineSummaryComment(
 
   const tide = evaluateTide(pr, ctx.config.tide, checkRuns, statuses)
 
+  const previous = await findManagedIssueComment(
+    ctx.octokit,
+    ctx.ref,
+    pullNumber,
+    PIPELINE_COMMENT_MARKER,
+    ctx.identity.login,
+  )
   const commentUrl = await upsertIssueCommentWithMarker(
     ctx.octokit,
     ctx.ref,
@@ -58,10 +72,13 @@ export async function upsertPipelineSummaryComment(
       pr,
       config: ctx.config,
       deploymentsAvailable: deploymentResult.available,
+      deliveryReceipt:
+        readPullRequestDelivery(previous, pr.head.sha) ??
+        options?.deliveryReceipt,
       planSection:
         options?.planSection !== undefined
           ? options.planSection
-          : await readExistingPlanSection(ctx, pullNumber),
+          : extractPlanSection(previous),
     }),
     ctx.identity.login,
   )
@@ -100,32 +117,17 @@ async function syncStatusBlock(
   await updatePullRequestBody(ctx.octokit, ctx.ref, pullNumber, body, pr.body)
 }
 
-/** Keep a plan section that an earlier workflow_run wrote into the comment. */
-async function readExistingPlanSection(
-  ctx: BotContext,
-  pullNumber: number,
-): Promise<string | null> {
-  return extractPlanSection(
-    await findManagedIssueComment(
-      ctx.octokit,
-      ctx.ref,
-      pullNumber,
-      PIPELINE_COMMENT_MARKER,
-      ctx.identity.login,
-    ),
-  )
-}
-
 export async function maybeRefreshPipelineSummary(
   ctx: BotContext,
   pullNumber: number,
   pr: PullRequest,
+  deliveryReceipt?: PullRequestDelivery,
 ): Promise<void> {
   if (pr.draft || pr.state !== 'open') {
     return
   }
 
-  await upsertPipelineSummaryComment(ctx, pullNumber)
+  await upsertPipelineSummaryComment(ctx, pullNumber, { deliveryReceipt })
 }
 
 export async function resolvePullNumbers(
