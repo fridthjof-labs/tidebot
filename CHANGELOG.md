@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/fridthjof-labs/tidebot/compare/v0.5.2...v0.6.0) (2026-11-15)
+
+
+### Features
+
+* retain native pull request delivery receipts ([#102](https://github.com/fridthjof-labs/tidebot/issues/102)) ([39e0e63](https://github.com/fridthjof-labs/tidebot/commit/39e0e6342cece2241c5bda41b2ad31b9a3a753be))
+
 ## [0.5.2](https://github.com/fridthjof-labs/tidebot/compare/v0.5.1...v0.5.2) (2026-10-21)
 
 
