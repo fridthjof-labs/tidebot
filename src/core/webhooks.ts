@@ -129,7 +129,7 @@ export function registerWebhookHandlers(
     )
   })
 
-  webhooks.on('pull_request', async ({ payload }) => {
+  webhooks.on('pull_request', async ({ id, payload }) => {
     const target = eventTarget(payload, options)
     if (!target) {
       return
@@ -148,6 +148,7 @@ export function registerWebhookHandlers(
       toPullRequest(payload.pull_request),
       {
         action: payload.action,
+        deliveryId: id,
         before: 'before' in payload ? payload.before : null,
         after: 'after' in payload ? payload.after : null,
       },

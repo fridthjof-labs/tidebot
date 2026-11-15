@@ -144,7 +144,10 @@ function hasMergeIntent(pr: PullRequest, requiredLabels: string[]): boolean {
 }
 
 /** The originating pull request event, when there was one. */
-export type PullRequestEvent = PushEvent & { action?: string }
+export type PullRequestEvent = PushEvent & {
+  action?: string
+  deliveryId?: string
+}
 
 /** A copy without those labels. The caller's pull request is not modified. */
 function withoutLabels(pr: PullRequest, removed: string[]): PullRequest {
@@ -251,7 +254,14 @@ export async function handlePullRequest(
     }
   }
 
-  await maybeRefreshPipelineSummary(ctx, pullNumber, pull)
+  const deliveryReceipt =
+    event?.deliveryId &&
+    ['opened', 'reopened', 'synchronize', 'ready_for_review'].includes(
+      event.action ?? '',
+    )
+      ? { deliveryId: event.deliveryId, headSha: pull.head.sha }
+      : undefined
+  await maybeRefreshPipelineSummary(ctx, pullNumber, pull, deliveryReceipt)
 }
 
 export async function handleIssueComment(

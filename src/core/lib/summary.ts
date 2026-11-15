@@ -11,6 +11,8 @@ import {
   PIPELINE_COMMENT_MARKER,
   PLAN_SECTION_BEGIN,
   PLAN_SECTION_END,
+  type PullRequestDelivery,
+  pullRequestDeliveryMarker,
   STATUS_BLOCK_BEGIN,
   STATUS_BLOCK_END,
 } from './markers.js'
@@ -39,6 +41,7 @@ export function formatPipelineSummary(input: {
   pr: PullRequest
   config: BotConfig
   deploymentsAvailable?: boolean
+  deliveryReceipt?: PullRequestDelivery | null
   planSection?: string | null
 }): string {
   const {
@@ -57,8 +60,13 @@ export function formatPipelineSummary(input: {
   const blockers = tide.ready || finished ? [] : blockerLines(tide, checkRuns)
   const alsoFailing = alsoFailingLines(checkRuns, blockedCheckContexts(tide))
 
+  const deliveryMarker = pullRequestDeliveryMarker(
+    input.deliveryReceipt,
+    pr.head.sha,
+  )
   return [
     PIPELINE_COMMENT_MARKER,
+    ...(deliveryMarker ? [deliveryMarker] : []),
     `> [!${verdict.alert}]`,
     `> **${verdict.icon} ${verdict.headline}**`,
     `> ${verdict.detail}`,

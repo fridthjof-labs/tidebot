@@ -6,7 +6,10 @@ import {
   handlePullRequest,
   handleWorkflowRun,
 } from '../src/core/bot.js'
-import { PIPELINE_COMMENT_MARKER } from '../src/core/lib/markers.js'
+import {
+  PIPELINE_COMMENT_MARKER,
+  readPullRequestDelivery,
+} from '../src/core/lib/markers.js'
 import type { PullRequest } from '../src/core/types.js'
 import {
   type FakeCheckRun,
@@ -488,6 +491,47 @@ describe('handlePullRequest', () => {
 
     expect(createComment).toHaveBeenCalledTimes(1)
     expect(state.comments[0].body).toMatch(PIPELINE_COMMENT_MARKER)
+  })
+
+  it('carries the actual PR delivery through one existing comment and preserves it on refresh', async () => {
+    const headSha = 'a'.repeat(40)
+    const deliveryId = '01234567-89ab-cdef-0123-456789abcdef'
+    const pr = pullRequest({ head: { sha: headSha } })
+    const state: FakeState = {
+      pr,
+      labels: [],
+      checkRuns: GREEN,
+      changedPaths: [],
+      comments: [],
+    }
+    const { octokit, createComment } = fakeOctokit(state)
+    const ctx = context({ octokit })
+    await handlePullRequest(ctx, 42, pr, { action: 'opened', deliveryId })
+    expect(readPullRequestDelivery(state.comments[0].body, headSha)).toEqual({
+      headSha,
+      deliveryId,
+    })
+    await handlePullRequest(ctx, 42, pr, { action: 'opened', deliveryId })
+    await handlePullRequest(ctx, 42, pr)
+    expect(createComment).toHaveBeenCalledTimes(1)
+    expect(readPullRequestDelivery(state.comments[0].body, headSha)).toEqual({
+      headSha,
+      deliveryId,
+    })
+    pr.head.sha = 'b'.repeat(40)
+    await handlePullRequest(ctx, 42, pr)
+    expect(
+      readPullRequestDelivery(state.comments[0].body, pr.head.sha),
+    ).toBeNull()
+    await handlePullRequest(ctx, 42, pr, { action: 'edited', deliveryId })
+    expect(
+      readPullRequestDelivery(state.comments[0].body, pr.head.sha),
+    ).toBeNull()
+    await handlePullRequest(ctx, 42, pr, { action: 'synchronize', deliveryId })
+    expect(
+      readPullRequestDelivery(state.comments[0].body, pr.head.sha),
+    ).toEqual({ headSha: pr.head.sha, deliveryId })
+    expect(createComment).toHaveBeenCalledTimes(1)
   })
 
   it('renders the pipeline summary once per command, not twice', async () => {

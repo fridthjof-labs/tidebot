@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  pullRequestDeliveryMarker,
+  readPullRequestDelivery,
   STATUS_BLOCK_BEGIN,
   STATUS_BLOCK_END,
 } from '../src/core/lib/markers.js'
@@ -501,5 +503,48 @@ describe('a pull request that is over', () => {
     })
 
     expect(block).toMatch('**Tidebot — ✅ Merged**')
+  })
+})
+
+describe('native pull-request delivery receipt', () => {
+  const headSha = 'a'.repeat(40)
+  const receipt = {
+    deliveryId: '01234567-89ab-cdef-0123-456789abcdef',
+    headSha,
+  }
+  it('retains only a valid full-head receipt immediately after the owner marker', () => {
+    const body = formatPipelineSummary({
+      checkRuns: [],
+      deployments: [],
+      tide: decision(),
+      pr: pullRequest({ head: { sha: headSha } }),
+      config: config(),
+      deliveryReceipt: receipt,
+    })
+    expect(readPullRequestDelivery(body, headSha)).toEqual(receipt)
+    expect(readPullRequestDelivery(body, 'b'.repeat(40))).toBeNull()
+    expect(readPullRequestDelivery(`forged\n${body}`, headSha)).toBeNull()
+    expect(
+      readPullRequestDelivery(
+        `${body}\n${pullRequestDeliveryMarker(receipt, headSha)}`,
+        headSha,
+      ),
+    ).toBeNull()
+    expect(
+      pullRequestDeliveryMarker(
+        { ...receipt, deliveryId: 'not-a-delivery' },
+        headSha,
+      ),
+    ).toBeNull()
+    expect(
+      pullRequestDeliveryMarker({ ...receipt, headSha: 'short' }, 'short'),
+    ).toBeNull()
+    expect(readPullRequestDelivery(null, headSha)).toBeNull()
+    expect(
+      readPullRequestDelivery(
+        '<!-- tidebot-pipeline -->\n<!-- tidebot:pull-request-delivery:bad -->\n',
+        headSha,
+      ),
+    ).toBeNull()
   })
 })

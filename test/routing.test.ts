@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { invalidateConfigCache } from '../src/core/config/load.js'
 import type { BotClients } from '../src/core/github.js'
 import { resetBotIdentityCache } from '../src/core/identity.js'
+import { readPullRequestDelivery } from '../src/core/lib/markers.js'
 import { registerWebhookHandlers } from '../src/core/webhooks.js'
 import { fakeGitHub } from './fake-github.js'
 import { IDENTITY } from './helpers.js'
@@ -11,12 +12,12 @@ import { IDENTITY } from './helpers.js'
  * Drives the real handler registration through Octokit's emitter, so these
  * exercise the routing and gating a delivery actually goes through.
  */
-function harness(options: { allowedOwners?: string[] } = {}) {
-  const { octokit, requests } = fakeGitHub({
+function harness(options: { allowedOwners?: string[] } = {}, headSha = 'abc') {
+  const { octokit, requests, db } = fakeGitHub({
     pulls: [
       {
         number: 7,
-        head: { sha: 'abc', ref: 'f', repo: { full_name: 'acme/widget' } },
+        head: { sha: headSha, ref: 'f', repo: { full_name: 'acme/widget' } },
       },
     ],
   })
@@ -38,7 +39,7 @@ function harness(options: { allowedOwners?: string[] } = {}) {
   } as unknown as BotClients
 
   registerWebhookHandlers(clients, options)
-  return { webhooks, getInstallationOctokit, octokit, requests }
+  return { webhooks, getInstallationOctokit, octokit, requests, db }
 }
 
 const REPOSITORY = {
@@ -79,6 +80,36 @@ describe('event routing', () => {
     })
 
     expect(getInstallationOctokit).toHaveBeenCalledWith(42)
+  })
+
+  it('carries the verified native delivery ID into the existing pipeline record', async () => {
+    const headSha = 'a'.repeat(40)
+    const deliveryId = '01234567-89ab-cdef-0123-456789abcdef'
+    const { webhooks, db } = harness({}, headSha)
+    const payload = JSON.stringify({
+      action: 'opened',
+      installation: { id: 42 },
+      repository: REPOSITORY,
+      pull_request: {
+        number: 7,
+        node_id: 'PR_1',
+        state: 'open',
+        labels: [],
+        head: { sha: headSha, ref: 'f', repo: { full_name: 'acme/widget' } },
+        base: { ref: 'main' },
+        user: { login: 'someone' },
+      },
+    })
+    await webhooks.verifyAndReceive({
+      id: deliveryId,
+      name: 'pull_request',
+      payload,
+      signature: await webhooks.sign(payload),
+    })
+    expect(readPullRequestDelivery(db.comments[0].body, headSha)).toEqual({
+      deliveryId,
+      headSha,
+    })
   })
 
   it('ignores an event with no installation', async () => {

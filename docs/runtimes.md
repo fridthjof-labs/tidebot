@@ -117,3 +117,26 @@ exhaust the hourly quota. What keeps it down:
   when an enabled plugin actually needs them.
 - Config is cached rather than re-read per event.
 - A plugin that is on but has no rules makes no calls at all.
+
+## Native pull-request delivery receipts
+
+For signed `opened`, `reopened`, `synchronize` and `ready_for_review` deliveries,
+the existing pipeline comment carries a bounded machine marker directly below
+`<!-- tidebot-pipeline -->`:
+
+```text
+<!-- tidebot:pull-request-delivery:v1:DELIVERY_UUID:FULL_HEAD_SHA -->
+```
+
+It uses the actual Octokit delivery ID and payload head. A refetch that observes
+a different head omits the stale receipt. Later check/plan refreshes preserve a
+unique same-head receipt from the managed comment; a new head clears it until
+its own PR event arrives. Redelivery still uses the existing delivery dedupe
+and one pipeline comment, without adding a queue, comment, credential or daemon.
+The action runtime does not invent a signed webhook ID.
+
+External consumers must independently verify the installed App author, exact
+repository/PR, current full head, and their own enrollment policy. The receipt
+is event provenance, not permission to merge or approval of the diff. GitHub's
+native comment ID and URL remain the record's identifiers. No model output or
+PR text is parsed into this marker.

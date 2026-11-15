@@ -46,3 +46,36 @@ export const STATUS_BLOCK_END = '<!-- tidebot-status-end -->'
 export function commandReplyMarker(commentId: number): string {
   return `<!-- tidebot:reply:${commentId} -->`
 }
+
+/** Native signed pull-request delivery carried by the existing pipeline record. */
+export type PullRequestDelivery = { deliveryId: string; headSha: string }
+
+export function pullRequestDeliveryMarker(
+  receipt: PullRequestDelivery | null | undefined,
+  headSha: string,
+): string | null {
+  if (
+    !receipt ||
+    receipt.headSha !== headSha ||
+    !/^[a-f0-9]{40}$/.test(receipt.headSha) ||
+    !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
+      receipt.deliveryId,
+    )
+  )
+    return null
+  return `<!-- tidebot:pull-request-delivery:v1:${receipt.deliveryId}:${receipt.headSha} -->`
+}
+
+export function readPullRequestDelivery(
+  body: string | null,
+  headSha: string,
+): PullRequestDelivery | null {
+  if (body?.split('<!-- tidebot:pull-request-delivery:').length !== 2)
+    return null
+  const match = body.match(
+    /^<!-- tidebot-pipeline -->\n<!-- tidebot:pull-request-delivery:v1:([a-f0-9-]{36}):([a-f0-9]{40}) -->\n/i,
+  )
+  if (!match) return null
+  const receipt = { deliveryId: match[1], headSha: match[2] }
+  return pullRequestDeliveryMarker(receipt, headSha) ? receipt : null
+}
