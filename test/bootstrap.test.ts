@@ -61,12 +61,22 @@ describe('detectCheckNames', () => {
       [
         'name: Quality',
         'jobs:',
-        '  check:',
-        '    name: check',
+        '  build:',
+        '    name: Compile',
         '    runs-on: x',
+        '  check:',
+        '    runs-on: x',
+        '  expression:',
+        '    name: Tests for ${{ inputs.os }}',
+        '  matrix:',
+        '    strategy:',
+        '      matrix: {os: [ubuntu-latest, macos-latest]}',
+        '    runs-on: ${{ matrix.os }}',
+        '  reused:',
+        '    uses: ./.github/workflows/shared.yml',
       ].join('\n'),
     )
-    expect(await detectCheckNames(root)).toEqual(['check'])
+    expect(await detectCheckNames(root)).toEqual(['Compile', 'check'])
   })
 
   it('is empty when there are no workflows', async () => {
@@ -77,6 +87,11 @@ describe('detectCheckNames', () => {
 describe('initRepository', () => {
   it('writes a config that parses, seeded with detected area rules', async () => {
     await mkdir(join(root, 'apps/site'), { recursive: true })
+    await mkdir(join(root, '.github/workflows'), { recursive: true })
+    await writeFile(
+      join(root, '.github/workflows/ci.yml'),
+      'jobs:\n  check:\n    runs-on: ubuntu-latest',
+    )
 
     const result = await initRepository({
       root,
@@ -89,6 +104,13 @@ describe('initRepository', () => {
     expect(result.written).toContain('.github/tidebot.yaml')
     const raw = await readFile(join(root, '.github/tidebot.yaml'), 'utf8')
     const parsed = parseConfig(raw)
+    expect(raw).toContain('#   - "check"')
+    expect(parsed.tide.requiredContexts).toEqual([])
+    const configured = raw.replace(
+      'requiredContexts: []',
+      'requiredContexts: ["check"]',
+    )
+    expect(parseConfig(configured).tide.requiredContexts).toEqual(['check'])
     expect(parsed.area.rules).toContainEqual({
       prefix: 'apps/site/',
       label: 'area/site',
