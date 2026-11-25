@@ -172,7 +172,7 @@ async function commandInit(args: Args): Promise<void> {
     console.log(`exists   ${file} (use --force to overwrite)`)
   }
   console.log(
-    '\nReview .github/tidebot.yaml, then run:\n  tidebot labels --repo <owner>/<repo>',
+    '\nReview the generated files and commit them to the default branch on GitHub, then run:\n  tidebot labels --repo <owner>/<repo>',
   )
 }
 

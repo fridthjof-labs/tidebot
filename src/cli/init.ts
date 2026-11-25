@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { isMap, isScalar, parseDocument } from 'yaml'
 
 const TEMPLATES = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -94,10 +95,22 @@ export async function detectCheckNames(root: string): Promise<string[]> {
       continue
     }
     const raw = await readFile(join(workflowDir, entry), 'utf8')
-    for (const match of raw.matchAll(/^ {4}name:\s*(.+)$/gm)) {
-      const jobName = match[1].trim().replace(/^['"]|['"]$/g, '')
-      if (!jobName.includes('${{')) {
-        names.add(jobName)
+    const workflow = parseDocument(raw)
+    const jobs = workflow.get('jobs')
+    if (workflow.errors.length > 0 || !isMap(jobs)) {
+      continue
+    }
+    for (const { key, value: job } of jobs.items) {
+      if (!isMap(job) || job.has('uses') || !isScalar(key)) {
+        continue
+      }
+      const strategy = job.get('strategy')
+      if (isMap(strategy) && strategy.has('matrix')) {
+        continue
+      }
+      const name = job.get('name') ?? key.value
+      if (typeof name === 'string' && name.trim() && !name.includes('${{')) {
+        names.add(name)
       }
     }
   }
@@ -132,9 +145,10 @@ function renderConfig(
     output = output.replace(
       '  requiredContexts: []',
       [
-        '  # Checks found in this repository — uncomment the ones that must',
-        '  # pass before Tidebot merges:',
-        ...checkNames.map((name) => `  #   - ${name}`),
+        '  # Candidate check names from local workflows:',
+        ...checkNames.map((name) => `  #   - ${JSON.stringify(name)}`),
+        '  # Copy the required names into requiredContexts, e.g. ["check"].',
+        '  # Confirm the exact names on GitHub before enabling merges.',
         '  requiredContexts: []',
       ].join('\n'),
     )

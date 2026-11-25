@@ -33,16 +33,20 @@ mise exec -- pnpm tidebot init --dir ../my-repo --actions
 <!-- x-release-please-end -->
 
 This writes `.github/tidebot.yaml` and `.github/workflows/tidebot.yml` in the
-target repository. With an authenticated [GitHub CLI](https://cli.github.com/),
-create its labels and verify the installation:
+target repository. Review the config and set `tide.requiredContexts` to the
+checks Tidebot should require for a merge. An empty list adds no check
+requirements to Tidebot's merge gate.
+
+Commit and push the generated files to the target repository's default branch
+so `labels` and `doctor` can read the config. With an authenticated
+[GitHub CLI](https://cli.github.com/), create the labels and verify the install:
 
 ```bash
 GITHUB_TOKEN="$(gh auth token)" mise exec -- pnpm tidebot labels --repo my-org/my-repo
 GITHUB_TOKEN="$(gh auth token)" mise exec -- pnpm tidebot doctor --repo my-org/my-repo
 ```
 
-Commit the generated files. GitHub Actions is enough for one repository and
-needs no App or hosting. For several repositories, a named bot identity, or
+GitHub Actions is enough for one repository and needs no App or hosting. For several repositories, a named bot identity, or
 automatic CI after a branch update, use the [App or hosted setup](docs/install.md).
 
 ## Use
@@ -62,9 +66,9 @@ autoApprove:
       requiredContexts: [check]
 ```
 
-`requiredContexts` uses the Check Runs API name—normally the job name, such as
-`check`. Run `pnpm tidebot init` to list the check names already present in a
-repository.
+`requiredContexts` uses the exact Check Runs API name, such as `check`.
+`pnpm tidebot init` suggests names for simple workflow jobs. For matrix jobs,
+reusable workflows, and external checks, use the names shown on a real PR.
 
 On a pull request, collaborators can use `/lgtm`, `/approve`, `/hold`,
 `/rebase`, and `/retest`. Optional `/plan`, `/deploy`, `/bug`, and `/feature`

@@ -29,9 +29,11 @@ The generated workflow checks this repository out to get the bot's code, so
 reachable with a PAT you add to `actions/checkout` in the generated workflow.
 The hosted runtimes have no such requirement.
 
-Commit `.github/tidebot.yaml` and `.github/workflows/tidebot.yml`, then create
-the labels it refers to. No App is needed for this — the CLI falls back to
-`GITHUB_TOKEN` so a repository can be set up before one exists:
+Review `.github/tidebot.yaml` and set `tide.requiredContexts` to the checks
+Tidebot should require for a merge. An empty list adds no check requirements
+to Tidebot's merge gate. Commit and push the config and generated workflow
+files to the target repository's default branch, then create the labels the
+config refers to. The CLI can use `GITHUB_TOKEN` before an App is installed:
 
 ```bash
 GITHUB_TOKEN="$(gh auth token)" mise exec -- pnpm tidebot labels --repo my-org/my-repo
@@ -43,10 +45,13 @@ repositories default the workflow token to read-only, and a reusable workflow
 cannot be granted more than its caller has — so that block is load-bearing, not
 documentation.
 
-The bot always acts as `github-actions[bot]`. A branch update made with the
-job's own token does not re-trigger CI, by GitHub's recursion guard. If
-auto-rebase must restart CI, add `TIDEBOT_APP_ID` and `TIDEBOT_PRIVATE_KEY` as
-repository secrets. Tidebot uses that App token only for the branch update;
+The bot acts as `github-actions[bot]` for reviews. If it should submit
+approving reviews, enable **Allow GitHub Actions to create and approve pull
+requests** under **Settings → Actions → General**.
+
+A branch update made with the job's own token can leave `pull_request` checks
+waiting for a maintainer's approval. To trigger CI automatically after an
+auto-rebase, add `TIDEBOT_APP_ID` and `TIDEBOT_PRIVATE_KEY` as repository secrets. Tidebot uses that App token only for the branch update;
 labels, comments, approvals, and merges still use `github-actions[bot]`.
 
 Do not also run that App's webhook receiver for the same repository. That
