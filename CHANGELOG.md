@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/fridthjof-labs/tidebot/compare/v0.6.0...v0.6.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* clarify Tidebot first-install setup ([#114](https://github.com/fridthjof-labs/tidebot/issues/114)) ([9551fa1](https://github.com/fridthjof-labs/tidebot/commit/9551fa1aa03541d2b67e71817f69931de271e8fe))
+
 ## [0.6.0](https://github.com/fridthjof-labs/tidebot/compare/v0.5.2...v0.6.0) (2026-11-15)
 
 
